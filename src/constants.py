@@ -1,5 +1,7 @@
 from enum import Enum
 
+AGENT_STATE_SIZE = 20  # 4 for direction + 4*4 for vision (4 directions, each with snake/green_apple/red_apple/distance)
+AGENT_ACTION_SIZE = 4
 
 BOARD_WIDTH = 10
 BOARD_HEIGHT = 10
@@ -13,7 +15,6 @@ RIGHT = (1, 0)
 
 NUM_GREEN_APPLES = 2
 NUM_RED_APPLES = 1
-
 
 class CellType(Enum):
     EMPTY = 0
@@ -32,3 +33,9 @@ VISION_CHAR_MAP = {
     CellType.GREEN_APPLE: 'G',
     CellType.RED_APPLE: 'R'
 }
+
+COLOR_BLACK = (0, 0, 0)
+COLOR_HEAD = (0, 0, 150)
+COLOR_GREEN = (0, 255, 0)
+COLOR_RED = (255, 0, 0)
+COLOR_BLUE = (0, 0, 255) # For snake

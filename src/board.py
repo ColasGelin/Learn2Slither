@@ -1,4 +1,4 @@
-from constants import BOARD_WIDTH, BOARD_HEIGHT, CellType
+from src.constants import BOARD_WIDTH, BOARD_HEIGHT, CellType
 import random
 
 

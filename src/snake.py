@@ -1,4 +1,5 @@
-from constants import INITIAL_SNAKE_LENGTH, RIGHT, BOARD_WIDTH, BOARD_HEIGHT
+from src.constants import INITIAL_SNAKE_LENGTH, RIGHT, BOARD_WIDTH, BOARD_HEIGHT
+import random
 
 
 class Snake:
@@ -6,6 +7,10 @@ class Snake:
         self.length = INITIAL_SNAKE_LENGTH
         self.body = []
         self.direction = RIGHT
+        start_x = random.randint(0, BOARD_WIDTH - INITIAL_SNAKE_LENGTH)
+        start_y = random.randint(0, BOARD_HEIGHT - 1)
+        self.body = [(start_x + x, start_y) for x in range(INITIAL_SNAKE_LENGTH)]
+        self.head = self.body[0]
 
     def move(self):
         if not self.body:
@@ -16,10 +21,10 @@ class Snake:
         new_head_y = head_y + self.direction[1]
         
         self.body.insert(0, (new_head_x, new_head_y))
+        self.head = self.body[0]  # Update the head property
         
         if len(self.body) > self.length:
             self.body.pop()
-        pass
 
     def grow(self, amount=1):
         self.length += amount
