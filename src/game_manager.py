@@ -14,7 +14,7 @@ class GameManager:
         self.snake = Snake()
         self.apples = []
         self.place_initial_apples()
-        self.score = 0
+        self.score = 3
         self.game_over = False
         self.time_steps = 0
         
@@ -50,25 +50,17 @@ class GameManager:
             self.game_over = True
             return True, self.score
 
-        # Debug info for apple detection
-        print(f"Snake head: {self.snake.head}, Apples: {self.get_current_apple_coords()}")
-        
         if self.snake.head in self.get_current_apple_coords():
-            print(f"COLLISION DETECTED! Snake head: {self.snake.head}")
             apple = next(apple for apple in self.apples if apple.position == self.snake.head)
             if apple.color == "red":
                 self.snake.shrink()
                 self.score -= 1
-                print(f"Ate red apple! Score: {self.score}, Length: {self.snake.length}")
             elif apple.color == "green":
                 self.snake.grow()
                 self.score += 1
-                print(f"Ate green apple! Score: {self.score}, Length: {self.snake.length}")
             
             # Debug info for apple removal
-            print(f"Removing apple at {apple.position}, color: {apple.color}")
             self.apples.remove(apple)
             self.place_apple(apple.color)  # Replace with same type of apple
-            print(f"New apples list: {self.get_current_apple_coords()}")
             
         return False, self.score  # Return game_over=False and current score 

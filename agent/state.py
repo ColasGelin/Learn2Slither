@@ -56,6 +56,7 @@ class State:
                 if (x, y) in snake.body[1:]:
                     sees_snake_body = True
                     distance_to_snake = distance
+                    break
                 
                 for apple in game_manager.apples:
                     if (x, y) == apple.position:

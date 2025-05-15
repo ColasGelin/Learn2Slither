@@ -1,8 +1,7 @@
 import pygame
 import sys
-import pickle
 import os
-
+import argparse
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.insert(0, project_root)
@@ -37,17 +36,19 @@ def draw_board(screen, game_manager):
     
     pygame.display.flip()
 
-def train_agent(episodes=100, render=True, render_every=10, save_every=50, load_model=False):
+def train_agent(episodes=100, render=True, render_every=1000, save_every=None, model_path=None, speed=SPEED):
+    if save_every is None:
+        save_every = episodes // 5
     if render:
         pygame.init()
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("Snake Game")
         clock = pygame.time.Clock()
-        
+
     agent = SnakeAgent()
     stateProcessor = State()
     scores = []
-    max_score = 0
+    max_score = 3
     
     for episode in range(episodes):
         game_manager = GameManager()
@@ -81,7 +82,7 @@ def train_agent(episodes=100, render=True, render_every=10, save_every=50, load_
             elif score < prev_score:
                 reward = -5
             else:
-                reward = -0.01      
+                reward = -0.01
                 
             next_state = stateProcessor.get_state(game_manager)
             agent.train(current_state, action_idx, reward, next_state, game_over)
@@ -109,18 +110,84 @@ def train_agent(episodes=100, render=True, render_every=10, save_every=50, load_
                 f"Avg Score: {avg_score:.2f}, Max Score: {max_score}")
         
         if (episode + 1) % save_every == 0:
-            agent.save_model(f"model_episode_{episode + 1}.pth")
-            print(f"Model saved at episode {episode + 1}")
+            agent.save_model(f"models/model_episode_{episode + 1}.pth")
+            print(f"Model saved at episode ")
             
-    agent.save_model("final_model.pth")
+    agent.save_model("models/final_model.pth")
     print("Training completed. Final model saved.")
 
-def main():
-    training_mode = True
+def play_game(model_path=None, speed=SPEED):
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("Snake Game")
+    clock = pygame.time.Clock()
     
-    if training_mode:
-        train_agent()
+    game_manager = GameManager()
+    game_manager.reset_game()
+    
+    if model_path:
+        agent = SnakeAgent()
+        agent.load_model(model_path)
+        agent.epsilon = 0 
+        stateProcessor = State()
+        print(f"AI playing with model: {model_path}")
+
+        # Game loop for AI play
+        while not game_manager.game_over:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+            # Get current state and action from agent
+            current_state = stateProcessor.get_state(game_manager)
+            action = agent.get_action(current_state)
+
+            # Take step in game
+            game_over, score = game_manager.step(action)
+            game_manager.game_over = game_over
+            game_manager.score = score
+
+            # Render
+            draw_board(screen, game_manager)
+            clock.tick(speed)
         
+    print(f"Game Over! Final Score: {game_manager.score}")
+
+def main():
+    
+    parser = argparse.ArgumentParser(description='Snake Game with Reinforcement Learning')
+    
+    parser.add_argument('-m', '--mode', type=str, default='train', choices=['train', 'play'],
+                        help='Mode to run: train or play (default: train)')
+    parser.add_argument('-e', '--episodes', type=int, default=1000,
+                        help='Number of training episodes (default: 1000)')
+    parser.add_argument('-r', '--render', action='store_true',
+                        help='Enable rendering during training')
+    parser.add_argument('-s', '--speed', type=int, default=SPEED,
+                        help='Speed of the game (default: 24)')
+    parser.add_argument('-re', '--render-every', type=int, default=None,
+                        help='Render every N episodes (default: 10)')
+    parser.add_argument('-se', '--save-every', type=int, default=None,
+                        help='Save model every N episodes (default: episode / 10)')
+    parser.add_argument('-mp', '--model-path', type=str, default=None,
+                        help='Path to the model file')
+
+    if parser.parse_args().mode == 'train':
+        train_agent(
+            episodes=parser.parse_args().episodes,
+            render=parser.parse_args().render,
+            render_every=parser.parse_args().render_every,
+            save_every=parser.parse_args().save_every,
+            model_path=parser.parse_args().model_path,
+            speed=parser.parse_args().speed
+        )
+    else:
+        play_game(
+            model_path=parser.parse_args().model_path,
+            speed=parser.parse_args().speed
+        )
+
     pygame.quit()
     sys.exit()
 
