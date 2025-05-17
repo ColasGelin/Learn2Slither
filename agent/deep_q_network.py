@@ -21,7 +21,10 @@ class DQN(nn.Module):
 
 
 class DQNAgent:
-    def __init__(self, state_size=AGENT_STATE_SIZE, action_size=AGENT_ACTION_SIZE, learning_rate=0.001, gamma=0.99, epsilon_start=1.0, epsilon_min=0.01, epsilon_decay=0.995):
+    def __init__(self, state_size=AGENT_STATE_SIZE, 
+                 action_size=AGENT_ACTION_SIZE, 
+                 learning_rate=0.001, gamma=0.99, 
+                 epsilon_start=0.9, epsilon_min=0.2, epsilon_decay=0.995):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.policy_net = DQN(input_size=state_size, output_size=action_size).to(self.device)

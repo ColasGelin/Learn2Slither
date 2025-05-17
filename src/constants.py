@@ -1,6 +1,6 @@
 from enum import Enum
 
-AGENT_STATE_SIZE = 20  # 4 for direction + 4*4 for vision (4 directions, each with snake/green_apple/red_apple/distance)
+AGENT_STATE_SIZE = 24  
 AGENT_ACTION_SIZE = 4
 
 BOARD_WIDTH = 10

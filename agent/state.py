@@ -1,11 +1,10 @@
 import numpy as np
-from src.constants import BOARD_WIDTH, BOARD_HEIGHT, CellType
-
-AGENT_STATE_SIZE = 20  # 4 for direction + 4*4 for vision (4 directions, each with snake/green_apple/red_apple/nothing)
+from src.constants import BOARD_WIDTH, BOARD_HEIGHT, CellType, AGENT_STATE_SIZE
 
 class State:
     def __init__(self):
-        pass
+        # We'll still use this for normalization, but only based on what the snake sees
+        self.max_possible_distance = max(BOARD_WIDTH, BOARD_HEIGHT)
         
     def get_state(self, game_manager):
         state = np.zeros(AGENT_STATE_SIZE)
@@ -18,71 +17,69 @@ class State:
         state[2] = 1 if snake.direction == (0, -1) else 0  # UP
         state[3] = 1 if snake.direction == (0, 1) else 0   # DOWN
         
-        # Define the four directions to scan
+        # Define the four directions to scan (limited to what the snake can see)
         directions = [
             # (dx, dy, state_offset)
             (-1, 0, 4),   # LEFT
-            (1, 0, 8),    # RIGHT
-            (0, -1, 12),  # UP
-            (0, 1, 16)    # DOWN
+            (1, 0, 9),   # RIGHT
+            (0, -1, 14),  # UP
+            (0, 1, 19)    # DOWN
         ]
         
         for dx, dy, offset in directions:
-            # Variables to track what the snake can see in this direction
-            sees_snake_body = False
-            sees_green_apple = False
-            sees_red_apple = False
-            distance_to_snake = float('inf')
-            distance_to_green = float('inf')
-            distance_to_red = float('inf')
-            
-            x, y = head_x, head_y
+            # Default: nothing detected in this direction
+            object_detected = "none"
             distance = 0
             
-            while True:
-                x += dx
-                y += dy
-                distance += 1
-                
-                # Check if we're out of bounds before calling get_cell_type
-                if x < 0 or x >= BOARD_WIDTH or y < 0 or y >= BOARD_HEIGHT:
-                    break
-                    
-                cell_type = game_manager.board.get_cell_type(x, y)
-                
-                if cell_type == CellType.WALL:
-                    break
-                
+            # Start looking from the adjacent cell in the given direction
+            x, y = head_x + dx, head_y + dy
+            distance = 1  # Start with distance 1 (adjacent cell)
+            
+            # Continue looking in this direction until we hit something
+            while 0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT:
+                # Check for snake body
                 if (x, y) in snake.body[1:]:
-                    sees_snake_body = True
-                    distance_to_snake = distance
+                    object_detected = "snake"
                     break
                 
+                # Check for apples
+                apple_found = False
                 for apple in game_manager.apples:
                     if (x, y) == apple.position:
                         if apple.color == "green":
-                            sees_green_apple = True
-                            distance_to_green = distance
-                        else: 
-                            sees_red_apple = True
-                            distance_to_red = distance
+                            object_detected = "green_apple"
+                        else:
+                            object_detected = "red_apple"
+                        apple_found = True
+                        break
+                
+                if apple_found:
+                    break
+                
+                # Move to next cell in this direction
+                x += dx
+                y += dy
+                distance += 1
             
-            state[offset] = 1 if sees_snake_body else 0
-            state[offset + 1] = 1 if sees_green_apple else 0
-            state[offset + 2] = 1 if sees_red_apple else 0
+            # If we exited the loop without finding anything, it's a wall
+            if object_detected == "none" and not (0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT):
+                object_detected = "wall"
             
-            min_distance = min(
-                distance_to_snake if sees_snake_body else float('inf'),
-                distance_to_green if sees_green_apple else float('inf'),
-                distance_to_red if sees_red_apple else float('inf')
-            )
+            # Set binary flags based on what was detected
+            state[offset] = 1 if object_detected == "snake" else 0
+            state[offset + 1] = 1 if object_detected == "green_apple" else 0
+            state[offset + 2] = 1 if object_detected == "red_apple" else 0
+            state[offset + 3] = 1 if object_detected == "wall" else 0
             
-            # If nothing was seen, use a small value close to 0
-            if min_distance == float('inf'):
-                state[offset + 3] = 0.01
+            # Add normalized distance (0 if nothing found)
+            if object_detected == "none":
+                state[offset + 4] = 0
             else:
-                # Normalize to emphasize close objects
-                state[offset + 3] = 1.0 / min_distance
+                # Normalize distance to [0,1] range with higher values indicating closer objects
+                state[offset + 4] = self._normalize_distance(distance)
         
         return state
-                
+    
+    def _normalize_distance(self, distance):
+        # Inverse distance scaling: closer objects have higher values
+        return 1.0 / distance
