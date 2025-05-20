@@ -5,13 +5,15 @@ from src.apple import Apple
 
 
 class GameManager:
-    def __init__(self):
-        self.board = Board()
+    def __init__(self, board_width=BOARD_WIDTH, board_height=BOARD_HEIGHT, num_green_apples=2, num_red_apples=1):
+        self.board = Board(board_width, board_height)
+        self.num_green_apples = num_green_apples
+        self.num_red_apples = num_red_apples
         self.reset_game()
         
     def reset_game(self):
-        self.board = Board()
-        self.snake = Snake()
+        self.board = Board(self.board.width, self.board.height)
+        self.snake = Snake(self.board.width, self.board.height)
         self.apples = []
         self.place_initial_apples()
         self.score = 3
@@ -27,9 +29,9 @@ class GameManager:
         self.apples.append(Apple(x, y, color))
         
     def place_initial_apples(self):
-        for _ in range(1):  # NUM_RED_APPLES = 1
+        for _ in range(self.num_red_apples):
             self.place_apple(color="red")
-        for _ in range(2):  # NUM_GREEN_APPLES = 2
+        for _ in range(self.num_green_apples):
             self.place_apple(color="green")
 
     def step(self, action):

@@ -3,14 +3,16 @@ import random
 
 
 class Snake:
-    def __init__(self):
+    def __init__(self, board_width=BOARD_WIDTH, board_height=BOARD_HEIGHT):
         self.length = INITIAL_SNAKE_LENGTH
         self.body = []
         self.direction = RIGHT
-        start_x = random.randint(0, BOARD_WIDTH - INITIAL_SNAKE_LENGTH)
-        start_y = random.randint(0, BOARD_HEIGHT - 1)
+        start_x = random.randint(0, board_width - INITIAL_SNAKE_LENGTH)
+        start_y = random.randint(0, board_height - 1)
         self.body = [(start_x + x, start_y) for x in range(INITIAL_SNAKE_LENGTH)]
         self.head = self.body[0]
+        self.board_width = board_width
+        self.board_height = board_height
 
     def move(self):
         if not self.body:
@@ -41,8 +43,8 @@ class Snake:
 
     def check_collision_wall(self):
         head_x, head_y = self.body[0]
-        return not (0 <= head_x < BOARD_WIDTH and 0 <= head_y < BOARD_HEIGHT)
-    
+        return not (0 <= head_x < self.board_width and 0 <= head_y < self.board_height)
+
     def check_collision_self(self):
         head = self.body[0]
         return head in self.body[1:]

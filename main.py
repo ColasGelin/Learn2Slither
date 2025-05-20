@@ -16,6 +16,7 @@ from src.replay_manager import ReplayManager
 from agent.snake_agent import SnakeAgent
 from agent.state import State
 from agent.reward_system import RewardSystem
+from agent.curriculum_learning import CurriculumLearning
 import numpy as np
 
 # Pygame configuration
@@ -59,7 +60,7 @@ def draw_board(screen, game_manager, episode=None, max_score=None):
     
     pygame.display.flip()
 
-def train_agent(sessions=100, render=True, render_every=100, save_every=100000, model_path=None, speed=SPEED):
+def train_agent(sessions=100, render=True, render_every=100, save_every=100000, model_path=None, speed=SPEED, use_curriculum=False):
     if render:
         pygame.init()
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -67,6 +68,7 @@ def train_agent(sessions=100, render=True, render_every=100, save_every=100000, 
         clock = pygame.time.Clock()
 
     agent = SnakeAgent()
+    curriculum_manager = CurriculumLearning() if use_curriculum else None
     stateProcessor = State()
     reward_system = RewardSystem()
     replay_manager = ReplayManager()
@@ -74,7 +76,18 @@ def train_agent(sessions=100, render=True, render_every=100, save_every=100000, 
     max_score = 3
     
     for episode in range(sessions):
-        game_manager = GameManager()
+        
+        if curriculum_manager:
+            config = curriculum_manager.get_current_config()
+            game_manager = GameManager(
+                num_green_apples=config['green_apples'],
+                num_red_apples=config['red_apples']
+            )
+            reward_params = curriculum_manager.get_modified_reward_system_params()
+            reward_system = RewardSystem(**reward_params)
+        else:
+            game_manager = GameManager()
+        
         game_manager.reset_game()
         steps = 0  # Initialize step counter
         replay_manager.start_episode()
@@ -123,12 +136,23 @@ def train_agent(sessions=100, render=True, render_every=100, save_every=100000, 
             
         scores.append(game_manager.score)
             
-        print(f"Episode {episode + 1}/{sessions} - Score: {game_manager.score}, "
-                f"Max Score: {max_score}")
-        
+        print(f"Episode {episode}/{sessions} - Score: {game_manager.score}, "
+                f"Max Score: {max_score}, Stage: {curriculum_manager.get_current_config()['name']}")
+    
         if (episode + 1) % save_every == 0:
             agent.save_model(f"models/model_episode_{episode + 1}.pth")
             print(f"Model saved at episode {episode + 1}")
+        
+        if curriculum_manager:
+            stage_advanced = curriculum_manager.update_stage(
+                episode_score=game_manager.score,
+                episode_duration=steps
+            )
+            
+            if stage_advanced:
+                # Update reward system with new parameters
+                reward_params = curriculum_manager.get_modified_reward_system_params()
+                reward_system = RewardSystem(**reward_params)
 
     agent.save_model(f"models/final_model_{max_score}.pth")
     print("Training completed. Final model saved.")
@@ -220,6 +244,12 @@ def play_game(model_path=None, speed=SPEED, step_by_step=False):
             
             print(f"Game Over! Final Score: {game_manager.score}")
 
+def curriculum_learning():
+    # This function will be empty for now
+    # Will be implemented to provide progressive learning difficulty
+    print("Curriculum learning activated")
+    pass
+
 def main():
     
     parser = argparse.ArgumentParser(description='Snake Game with Reinforcement Learning')
@@ -240,6 +270,8 @@ def main():
                         help='Path to the model file')
     parser.add_argument('-st', '--step-by-step', action='store_true',
                         help='Enable step-by-step mode in play mode (press s to advance)')
+    parser.add_argument('-c', '--curriculum', action='store_true',
+                        help='Enable curriculum learning')
 
     if parser.parse_args().mode == 'train':
         train_agent(
@@ -248,7 +280,8 @@ def main():
             render_every=parser.parse_args().render_every,
             save_every=parser.parse_args().save_every,
             model_path=parser.parse_args().model_path,
-            speed=parser.parse_args().display_speed
+            speed=parser.parse_args().display_speed ,
+            use_curriculum=parser.parse_args().curriculum
         )
     else:
         play_game(
