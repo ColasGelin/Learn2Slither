@@ -5,7 +5,7 @@ from .deep_q_network import DQNAgent
 from .state import State
 
 class SnakeAgent:
-    def __init__(self, learning_rate=0.001, gamma=0.99, epsilon_start=1.0, 
+    def __init__(self, learning_rate=0.002, gamma=0.99, epsilon_start=1.0, 
                  batch_size=64, update_target_frequency=100, step_counter=0):
         self.state_processor = State()
         self.replay_buffer = ReplayBuffer()

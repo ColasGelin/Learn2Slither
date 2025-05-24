@@ -36,21 +36,24 @@ class GameManager:
 
     def step(self, action):
         if self.game_over:
-            return True, self.score
+            return True, self.score, None
         
         if action:
             self.snake.set_direction(action)
-        
         
         self.snake.move()
         self.time_steps += 1
         self.max_duration_this_session = self.time_steps
         
-        if (self.snake.check_collision_wall() or
-            self.snake.check_collision_self() or
-            self.snake.length <= 0):
+        if self.snake.check_collision_wall():
             self.game_over = True
-            return True, self.score
+            return True, self.score, 0
+        elif self.snake.check_collision_self():
+            self.game_over = True
+            return True, self.score, 1
+        elif self.snake.length <= 0:
+            self.game_over = True
+            return True, self.score, 2
 
         if self.snake.head in self.get_current_apple_coords():
             apple = next(apple for apple in self.apples if apple.position == self.snake.head)
@@ -65,4 +68,4 @@ class GameManager:
             self.apples.remove(apple)
             self.place_apple(apple.color)  # Replace with same type of apple
             
-        return False, self.score  # Return game_over=False and current score 
+        return False, self.score, None  # Return game_over=False and current score 

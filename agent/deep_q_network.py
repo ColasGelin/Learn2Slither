@@ -6,7 +6,7 @@ from src.constants import AGENT_STATE_SIZE, AGENT_ACTION_SIZE
 
 
 class DQN(nn.Module):
-    def __init__(self, input_size=AGENT_STATE_SIZE, output_size=AGENT_ACTION_SIZE, hidden_size=128):
+    def __init__(self, input_size=AGENT_STATE_SIZE, output_size=AGENT_ACTION_SIZE, hidden_size=64):
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
@@ -24,7 +24,7 @@ class DQNAgent:
     def __init__(self, state_size=AGENT_STATE_SIZE, 
                  action_size=AGENT_ACTION_SIZE, 
                  learning_rate=0.001, gamma=0.99, 
-                 epsilon_start=0.9, epsilon_min=0.2, epsilon_decay=0.995):
+                 epsilon_start=0.9, epsilon_min=0.2, epsilon_decay=0.998):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.policy_net = DQN(input_size=state_size, output_size=action_size).to(self.device)

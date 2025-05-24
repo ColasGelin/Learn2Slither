@@ -1,7 +1,7 @@
 import numpy as np
 
 class RewardSystem:
-    def __init__(self, base_move_penalty=-0.1, 
+    def __init__(self, base_move_penalty=-0.05, 
                  collision_penalty=-100, 
                  apple_reward=10,
                  bad_apple_penalty=-25,
