@@ -1,4 +1,7 @@
 import numpy as np
+import random
+import torch
+
 from src.constants import UP, DOWN, LEFT, RIGHT, AGENT_STATE_SIZE, AGENT_ACTION_SIZE
 from .replay_buffer import ReplayBuffer
 from .deep_q_network import DQNAgent
@@ -23,6 +26,9 @@ class SnakeAgent:
         self.update_target_frequency = update_target_frequency
         self.step_counter = step_counter
         
+        # Modify the epsilon decay to be slower
+        self.epsilon_decay = 0.9995  # Slower decay for more exploration
+
     def get_action(self, state_or_game_manager):
         # Check if the input is already a state array or if it's a game_manager
         if isinstance(state_or_game_manager, np.ndarray):
@@ -31,7 +37,20 @@ class SnakeAgent:
             # It's a game_manager object
             current_state = self.state_processor.get_state(state_or_game_manager)
         
-        action_idx = self.agent.get_action(current_state)
+        # With probability epsilon, choose a random action (exploration)
+        if random.random() < self.agent.epsilon:
+            # Introduce smart exploration - don't pick actions that would cause immediate death
+            valid_actions = self.get_valid_actions(current_state)
+            if valid_actions:
+                action_idx = self.actions.index(random.choice(valid_actions))
+            else:
+                action_idx = self.agent.get_action(current_state)
+        else:
+            # Otherwise, use policy (exploitation)
+            state_tensor = torch.FloatTensor(current_state).unsqueeze(0).to(self.agent.device)
+            q_values = self.agent.policy_net(state_tensor)
+            action_idx = torch.argmax(q_values).item()
+        
         return self.actions[action_idx]
         
     def train(self, state, action_idx, reward, next_state, done):
@@ -53,3 +72,42 @@ class SnakeAgent:
 
     def load_model(self, path):
         self.agent.load(path)
+
+    # Add method to predict valid moves
+    def get_valid_actions(self, state):
+        """Get actions that don't lead to immediate death based on state"""
+        valid_actions = []
+        
+        # Direction indices: [LEFT, RIGHT, UP, DOWN]
+        current_direction_idx = -1
+        for i in range(4):
+            if state[i] == 1:
+                current_direction_idx = i
+                break
+        
+        # Check each direction's immediate danger (wall or snake)
+        # We'll check state offsets [4+3, 9+3, 14+3, 19+3] which is where walls are indicated
+        # And offsets [4+0, 9+0, 14+0, 19+0] which is where snakes are indicated
+        direction_offsets = [4, 9, 14, 19]
+        directions = [LEFT, RIGHT, UP, DOWN]
+        
+        for i, direction in enumerate(directions):
+            # Skip if trying to go backwards (opposite of current direction)
+            if current_direction_idx != -1:
+                if (i == 0 and current_direction_idx == 1) or \
+                   (i == 1 and current_direction_idx == 0) or \
+                   (i == 2 and current_direction_idx == 3) or \
+                   (i == 3 and current_direction_idx == 2):
+                    continue
+            
+            # Check if there's an immediate wall or snake in this direction
+            wall_indicator = state[direction_offsets[i] + 3]
+            snake_indicator = state[direction_offsets[i]]
+            dist_to_obstacle = state[direction_offsets[i] + 4]
+            
+            # If there's no immediate wall or snake (distance > 1), the move is valid
+            if (wall_indicator == 0 or dist_to_obstacle < 0.99) and \
+               (snake_indicator == 0 or dist_to_obstacle < 0.99):
+                valid_actions.append(direction)
+        
+        return valid_actions
