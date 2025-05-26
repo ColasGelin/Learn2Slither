@@ -210,12 +210,14 @@ class GameManager:
         for i in range(self.num_players):
             self.handle_apple_collision(i)
             
-        # Check game over condition
-        self.game_over = not any(self.snake_alive)
+        # Check if there is only one snake left alive or if all snakes are dead
+        alive_count = sum(self.snake_alive)
+        if alive_count <= 1:  # Game ends when 0 or 1 snake remains
+            self.game_over = True
         
         # For backward compatibility with dual snake mode
         if self.num_players > 1:
-            return self.game_over, (self.score_1, self.score_2), tuple(death_reasons[:2])
+            return self.game_over, tuple(self.scores), tuple(death_reasons)
             
         # For standard single-player mode
         return self.game_over, self.scores[0], death_reasons[0]

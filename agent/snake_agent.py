@@ -9,7 +9,7 @@ from .state import State
 
 class SnakeAgent:
     def __init__(self, learning_rate=0.002, gamma=0.99, epsilon_start=1.0, 
-                 batch_size=64, update_target_frequency=100, step_counter=0):
+                 batch_size=64, update_target_frequency=100, step_counter=0, use_smart_exploration=False):
         self.state_processor = State()
         self.replay_buffer = ReplayBuffer()
         self.agent = DQNAgent(
@@ -17,8 +17,9 @@ class SnakeAgent:
             action_size=AGENT_ACTION_SIZE,
             learning_rate=learning_rate,
             gamma=gamma,
-            epsilon_start=epsilon_start
+            epsilon_start=epsilon_start,
         )
+        self.use_smart_exploration = use_smart_exploration
         
         self.actions = [UP, DOWN, LEFT, RIGHT]
         
@@ -40,9 +41,14 @@ class SnakeAgent:
         # With probability epsilon, choose a random action (exploration)
         if random.random() < self.agent.epsilon:
             # Introduce smart exploration - don't pick actions that would cause immediate death
-            valid_actions = self.get_valid_actions(current_state)
-            if valid_actions:
-                action_idx = self.actions.index(random.choice(valid_actions))
+            if self.use_smart_exploration:
+                # Get valid actions that don't lead to immediate death
+                valid_actions = self.get_valid_actions(current_state)
+                if valid_actions:
+                    action_idx = self.actions.index(random.choice(valid_actions))
+                else:
+                    # If no valid actions, fallback to agent's action
+                    action_idx = self.agent.get_action(current_state)
             else:
                 action_idx = self.agent.get_action(current_state)
         else:

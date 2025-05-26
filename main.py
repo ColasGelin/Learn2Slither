@@ -9,7 +9,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.insert(0, project_root)
 from src.game_manager import GameManager
-from src.constants import (BOARD_WIDTH, BOARD_HEIGHT, CellType, VISION_CHAR_MAP, 
+from src.constants import ( 
                       COLOR_BLACK, COLOR_HEAD, COLOR_GREEN, COLOR_RED, COLOR_BLUE,
                       UP, DOWN, LEFT, RIGHT, AGENT_STATE_SIZE, AGENT_ACTION_SIZE, 
                       CELL_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT, SPEED)
@@ -68,8 +68,12 @@ def draw_multi_player_board(screen, game_manager, episode=None, max_scores=None)
     """Draw the game board for a multi-player game with n players"""
     screen.fill(COLOR_BLACK)
     
-    # Draw all snakes
+    # Draw all snakes - only draw snakes that are alive
     for i, snake in enumerate(game_manager.snakes):
+        # Skip drawing if the snake is dead
+        if not game_manager.snake_alive[i]:
+            continue
+            
         if i < len(PLAYER_COLORS):
             color_data = PLAYER_COLORS[i]
         else:
@@ -91,36 +95,10 @@ def draw_multi_player_board(screen, game_manager, episode=None, max_scores=None)
         apple_rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
         pygame.draw.rect(screen, color, apple_rect)
     
-    # Add text display for episode and score information
-    if episode is not None:
-        font = pygame.font.SysFont('Arial', 20, bold=True)
-        
-        # Render episode text
-        episode_text = font.render(f"Episode: {episode}", True, (255, 255, 255))
-        screen.blit(episode_text, (10, 10))
-        
-        # Render scores for all players
-        color_names = ["Blue", "Purple", "Orange", "Cyan", "Player 5", "Player 6"]
-        y_offset = 40
-        
-        for i, score in enumerate(game_manager.scores):
-            # Get appropriate color name
-            color_name = color_names[i] if i < len(color_names) else f"Player {i+1}"
-            
-            # Display current score
-            score_text = font.render(f"{color_name} Score: {score}", True, (255, 255, 255))
-            screen.blit(score_text, (10, y_offset))
-            y_offset += 30
-            
-            # Display max score if available
-            if max_scores and i < len(max_scores) and max_scores[i] is not None:
-                max_score_text = font.render(f"{color_name} Max: {max_scores[i]}", True, (255, 255, 255))
-                screen.blit(max_score_text, (200, y_offset - 30))
-    
     pygame.display.flip()
 
 def train_agent(sessions=100, render=True, render_every=100, save_every=100000, 
-               model_path=None, speed=SPEED, num_players=1):
+               model_path=None, speed=SPEED, num_players=1, use_smart_exploration=False):
     """Unified training function that handles any number of players"""
     if render:
         pygame.init()
@@ -132,7 +110,7 @@ def train_agent(sessions=100, render=True, render_every=100, save_every=100000,
     # For single player, we can optionally load a model
     agents = []
     for i in range(num_players):
-        agent = SnakeAgent()
+        agent = SnakeAgent(use_smart_exploration=use_smart_exploration)
         # For single player only, we can load a pre-existing model
         if i == 0 and num_players == 1 and model_path:
             agent.load_model(model_path)
@@ -219,28 +197,37 @@ def train_agent(sessions=100, render=True, render_every=100, save_every=100000,
             # Calculate rewards and update agents
             for i in range(num_players):
                 # Only process active snakes or those that just died
-                if num_players == 1 or game_manager.snake_alive[i] or deaths[i] is not None:
+                if num_players == 1 or game_manager.snake_alive[i] or (deaths is not None and i < len(deaths) and deaths[i] is not None):
                     # Calculate reward
                     if num_players == 1:
                         reward = reward_system.calculate_reward(
                             game_manager, game_over, prev_score, scores[i])
                     else:
+                        # Make sure we have a valid death status for this player
+                        is_dead = deaths is not None and i < len(deaths) and deaths[i] is not None
+                        
+                        # Make sure we have valid score values - handle potential IndexError
+                        player_prev_score = prev_scores[i] if i < len(prev_scores) else 0
+                        player_new_score = scores[i] if i < len(scores) else 0
+                        
                         reward = reward_system.calculate_reward(
-                            game_manager, deaths[i] is not None, 
-                            prev_scores[i], scores[i], 
-                            is_multi_player=True, player_index=i)
+                            game_manager, is_dead, 
+                            player_prev_score, player_new_score, 
+                            num_players=num_players, player_index=i)
                     
                     # Get next state
                     next_state = state_processor.get_state(game_manager, i)
                     
                     # Train the agent if it was active
                     if action_indices[i] is not None:
+                        # For done status, use appropriate game over condition
+                        is_done = game_over if num_players == 1 else (deaths is not None and i < len(deaths) and deaths[i] is not None)
                         agents[i].train(
                             current_states[i], 
                             action_indices[i], 
                             reward, 
                             next_state, 
-                            game_over if num_players == 1 else deaths[i] is not None
+                            is_done
                         )
                     
                     # Update for next iteration
@@ -292,21 +279,12 @@ def train_agent(sessions=100, render=True, render_every=100, save_every=100000,
             print(f"Model{'s' if num_players > 1 else ''} saved at episode {episode + 1}")
     
     # Save final models
-    for i, agent in enumerate(agents):
-        if num_players == 1:
-            agent.save_model(f"models/final_model_{max_scores[0]}.pth")
-        else:
-            agent.save_model(f"models/final_agent{i+1}_{max_scores[i]}.pth")
-    
-    print("Training completed. Final model saved.")
-    for i in range(num_players):
-        print(f"Agent {i+1} total deaths:", death_counters[i])
+    if num_players == 1:
+        agent.save_model(f"models/final_model_{max_scores[0]}.pth")
     
     # Plot results
     if num_players == 1:
         plot_training_results(all_scores[0], np.mean(all_scores[0]))
-    else:
-        plot_multi_agents_training_results(all_scores)
     
     # Show the best replay at the end of training
     replay_manager.play_best(speed)
@@ -338,48 +316,6 @@ def plot_training_results(scores, mean_scores, window_size=100):
     
     plt.show()
 
-def plot_multi_agents_training_results(all_scores, window_size=100):
-    """Plot training results for multiple agents"""
-    plt.figure(figsize=(15, 10))
-    
-    num_agents = len(all_scores)
-    rows = min(num_agents, 4)  # Limit to 4 rows max
-    cols = (num_agents + rows - 1) // rows  # Calculate needed columns
-    
-    colors = ['blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive']
-    line_colors = ['red', 'orange', 'cyan', 'yellow', 'lime', 'magenta', 'black', 'teal']
-    
-    for i, scores in enumerate(all_scores):
-        plt.subplot(rows, cols, i+1)
-        
-        # Choose colors (with fallback)
-        color = colors[i % len(colors)]
-        line_color = line_colors[i % len(line_colors)]
-        
-        # Plot raw scores
-        plt.plot(scores, label=f'Agent {i+1} Score', alpha=0.3, color=color)
-        
-        # Plot moving average if enough data
-        if len(scores) >= window_size:
-            moving_avg = [np.mean(scores[max(0, j-window_size):j+1]) for j in range(len(scores))]
-            plt.plot(moving_avg, label=f'Moving Avg (w={window_size})', color=line_color, linewidth=1.5)
-        
-        # Plot overall mean
-        overall_mean = np.mean(scores)
-        plt.axhline(y=overall_mean, color='black', linestyle='--', 
-                    label=f'Mean: {overall_mean:.2f}')
-        
-        plt.xlabel('Episodes')
-        plt.ylabel('Score')
-        plt.title(f'Agent {i+1} Progress')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig('multi_agents_training_results.png')
-    print(f"Plot saved as 'multi_agents_training_results.png'")
-    
-    plt.show()
 
 def play_game(model_path=None, speed=SPEED, step_by_step=False):
     pygame.init()
@@ -499,7 +435,7 @@ def play_multi_player_game(model_paths=[], num_players=2, speed=SPEED, step_by_s
                 if step_by_step:
                     advance_step = False
 
-            # Draw the game board
+            # Draw the game board without score information
             draw_multi_player_board(screen, game_manager)
             
             if step_by_step:
@@ -532,6 +468,8 @@ def main():
                         help='Number of players (1-4) for training or play mode (default: 1)')
     parser.add_argument('-st', '--step-by-step', action='store_true',
                         help='Enable step-by-step mode in play mode (press space to advance)')
+    parser.add_argument('-sm', '--smart-exploration', action='store_true',
+                        help='Enable smart exploration during training')
     args = parser.parse_args()
     
     # Validate number of players
@@ -548,7 +486,8 @@ def main():
             save_every=args.save_every,
             model_path=args.model_path if args.num_players == 1 else None,
             speed=args.display_speed,
-            num_players=args.num_players
+            num_players=args.num_players,
+            use_smart_exploration=args.smart_exploration
         )
     elif args.mode == 'play':
         # Play mode with any number of players

@@ -36,17 +36,15 @@ class ReplayManager:
             state['multi_player'] = True
             state['players'] = []
             
-            # Add player 1
-            state['players'].append({
-                'body': list(game_manager.snake_1.body),
-                'score': game_manager.score_1
-            })
+            # Track alive status for each snake in multiplayer
+            state['snake_alive'] = game_manager.snake_alive.copy() if hasattr(game_manager, 'snake_alive') else [True] * len(game_manager.snakes)
             
-            # Add player 2
-            state['players'].append({
-                'body': list(game_manager.snake_2.body),
-                'score': game_manager.score_2
-            })
+            # Add all players (not just hardcoded ones)
+            for i, snake in enumerate(game_manager.snakes):
+                state['players'].append({
+                    'body': list(snake.body),
+                    'score': game_manager.scores[i]
+                })
             
             # Calculate combined score
             state['combined_score'] = sum(player['score'] for player in state['players'])
@@ -57,6 +55,7 @@ class ReplayManager:
                 'body': list(game_manager.snake.body),
                 'score': game_manager.score
             }]
+            state['snake_alive'] = [True]  # Single player is always alive until game over
         
         # Record apples (common for all modes)
         state['apples'] = [(a.position, a.color) for a in game_manager.apples]
@@ -74,16 +73,17 @@ class ReplayManager:
             self._save_replay()
             is_best = True
         
-        # Check for best combined score in multi-player mode
+        # Check for best mean score in multi-player mode
         if self.current_replay and self.current_replay[0].get('multi_player', False):
             final_state = self.current_replay[-1]
-            combined_score = final_state['combined_score']
-            
-            if combined_score > self.best_combined_score:
-                self.best_combined_score = combined_score
-                self.best_combined_replay = self.current_replay.copy()
-                self._save_replay("replays/best_combined_replay.pkl")
-                is_best = True
+            player_scores = [player['score'] for player in final_state['players']]
+            if player_scores and all(score > 0 for score in player_scores):
+                harmonic_mean = len(player_scores) / sum(1 / score for score in player_scores)
+                if harmonic_mean > self.best_combined_score:
+                    self.best_combined_score = harmonic_mean
+                    self.best_combined_replay = self.current_replay.copy()
+                    self._save_replay("replays/best_combined_replay.pkl")
+                    is_best = True
         
         # Save episode
         if is_best:
@@ -130,7 +130,7 @@ class ReplayManager:
         is_multi_player = replay[0].get('multi_player', False) if replay else False
         
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        title = f"Best {'Combined ' if is_combined else ''}Replay - Score: {score}"
+        title = f"Best {'Combined ' if is_combined else ''}Replay"
         pygame.display.set_caption(title)
         clock = pygame.time.Clock()
         font = pygame.font.SysFont('Arial', 20, bold=True)
@@ -153,6 +153,10 @@ class ReplayManager:
                 # Draw all snakes
                 player_count = len(state['players'])
                 for i, player in enumerate(state['players']):
+                    # Skip drawing dead snakes
+                    if 'snake_alive' in state and i < len(state['snake_alive']) and not state['snake_alive'][i]:
+                        continue
+                        
                     # Get colors for this player (loop through available colors)
                     color_data = self.player_colors[i % len(self.player_colors)]
                     
@@ -163,19 +167,6 @@ class ReplayManager:
                         if pos == player['body'][0]:  # Head
                             pygame.draw.rect(screen, color_data["head"], rect)
                 
-                # Display scores
-                y_offset = 10
-                for i, player in enumerate(state['players']):
-                    color_name = ["Blue", "Purple", "Orange", "Cyan"][i % 4]
-                    score_text = font.render(f"{color_name} Score: {player['score']}", True, (255, 255, 255))
-                    screen.blit(score_text, (10, y_offset))
-                    y_offset += 30
-                
-                # Show combined score for multi-player
-                if is_combined and is_multi_player:
-                    combined_text = font.render(f"Combined: {state['combined_score']}", True, (255, 255, 255))
-                    screen.blit(combined_text, (10, y_offset))
-
                 # Draw apples
                 for pos, color in state['apples']:
                     apple_color = self.apple_colors.get(color, COLOR_GREEN)
