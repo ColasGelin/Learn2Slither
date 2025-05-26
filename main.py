@@ -174,14 +174,10 @@ def train_agent(sessions=100, render=True, render_every=100, save_every=100000,
             # Execute actions based on number of players
             if num_players == 1:
                 # Single player mode
-                game_over, score, death = game_manager.step(actions[0])
+                game_over, score = game_manager.step(actions[0])
                 game_manager.game_over = game_over
-                deaths = [death]
                 scores = [score]
                 
-                # Update death counter
-                if death is not None:
-                    death_counters[0][death] += 1
             else:
                 # Multi-player mode
                 game_over, scores, deaths = game_manager.step_multi_player(actions)

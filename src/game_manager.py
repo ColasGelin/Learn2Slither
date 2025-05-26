@@ -5,7 +5,7 @@ from src.apple import Apple
 
 
 class GameManager:
-    def __init__(self, board_width=BOARD_WIDTH, board_height=BOARD_HEIGHT, num_green_apples=2, num_red_apples=1, num_players=1):
+    def __init__(self, board_width=BOARD_WIDTH, board_height=BOARD_HEIGHT, num_green_apples=1, num_red_apples=0, num_players=1):
         self.board = Board(board_width, board_height)
         self.num_green_apples = num_green_apples
         self.num_red_apples = num_red_apples
@@ -81,7 +81,7 @@ class GameManager:
             return self.step_multi_player([action])
         
         if self.game_over:
-            return True, self.score, None
+            return True, self.score
         
         if action:
             self.snake.set_direction(action)
@@ -89,24 +89,20 @@ class GameManager:
         self.snake.move()
         self.time_steps += 1
         
-        death_reason = None
         
         # Check collisions
         if self.snake.check_collision_wall():
             self.game_over = True
-            death_reason = 0
         elif self.snake.check_collision_self():
             self.game_over = True
-            death_reason = 1
         elif self.snake.length <= 0:
             self.game_over = True
-            death_reason = 2
 
         # Process apple collisions
         if not self.game_over and self.handle_apple_collision(0):
             pass  # Apple collision was handled in the method
         
-        return self.game_over, self.score, death_reason
+        return self.game_over, self.score
     
     def handle_apple_collision(self, snake_index):
         """Process apple collision for a specific snake"""
