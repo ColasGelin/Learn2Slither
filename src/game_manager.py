@@ -1,4 +1,4 @@
-from src.constants import BOARD_WIDTH, BOARD_HEIGHT
+from src.constants import BOARD_WIDTH, BOARD_HEIGHT, NUM_GREEN_APPLES, NUM_RED_APPLES
 from src.snake import Snake
 from src.board import Board
 from src.apple import Apple
@@ -9,8 +9,8 @@ class GameManager:
     def __init__(self,
                  board_width=BOARD_WIDTH,
                  board_height=BOARD_HEIGHT,
-                 num_green_apples=1,
-                 num_red_apples=0,
+                 num_green_apples=NUM_GREEN_APPLES,
+                 num_red_apples=NUM_RED_APPLES,
                  num_players=1):
         self.board = Board(board_width, board_height)
         self.num_green_apples = num_green_apples
@@ -227,10 +227,3 @@ class GameManager:
 
         # For standard single-player mode
         return self.game_over, self.scores[0], death_reasons[0]
-
-    def step_two_snakes(self, action_1, action_2):
-        """
-        Legacy method for two-snake game mode,
-        now redirects to the generalized method
-        """
-        return self.step_multi_player([action_1, action_2])

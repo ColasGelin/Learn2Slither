@@ -113,6 +113,7 @@ class DQNAgent:
                 'optimizer': self.optimizer.state_dict(),
                 'epsilon': self.epsilon
             }, path)
+        print(f"Model saved to {path}")
 
     def load(self, path):
         if torch.cuda.is_available():

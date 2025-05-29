@@ -38,32 +38,27 @@ class RewardSystem:
         """
         reward = 0
 
-        # Game over penalty
         if game_over:
             return self.collision_penalty
 
-        # Apple rewards/penalties
+        # Green and red apple rewards
         if new_score > prev_score:
-            # Big reward for eating green apple
             reward += self.apple_reward * (new_score - prev_score)
-            # Reset distance tracking after eating an apple
             if player_index in self.prev_distance_to_apple:
                 self.prev_distance_to_apple[player_index] = None
             return reward
-
         elif new_score < prev_score:
-            # Penalty for eating red apple
             reward += self.bad_apple_penalty
             return reward
 
-        # Distance-based rewards (approaching/avoiding)
+        # Distance-based rewards
         if num_players == 1:
             head_pos = game_manager.snake.head
         else:
             if player_index >= len(
                     game_manager.snakes
             ) or not game_manager.snake_alive[player_index]:
-                return 0  # No reward for inactive snake
+                return 0 
             head_pos = game_manager.snakes[player_index].head
 
         # Find distance to nearest green apple
@@ -91,9 +86,8 @@ class RewardSystem:
         # Default small penalty to encourage efficiency
         reward += self.base_move_penalty
 
-        # Additional rewards specific to multiplayer (if applicable)
+        # Additional rewards specific to multiplayer (bonus for being longer)
         if num_players > 1:
-            # Add bonus for being longer than other snakes
             current_length = len(game_manager.snakes[player_index].body)
             other_snakes_avg_length = 0
             active_other_snakes = 0
@@ -107,7 +101,7 @@ class RewardSystem:
                 other_snakes_avg_length /= active_other_snakes
                 length_advantage = (current_length -
                                     other_snakes_avg_length) * 0.01
-                reward += length_advantage  # Small bonus for being longer
+                reward += length_advantage 
 
         return reward
 

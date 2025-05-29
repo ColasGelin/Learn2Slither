@@ -5,9 +5,10 @@ import argparse
 import matplotlib.pyplot as plt
 import time
 from src.game_manager import GameManager
-from src.constants import (COLOR_BLACK, COLOR_HEAD, COLOR_GREEN, COLOR_RED,
-                           COLOR_BLUE, CELL_SIZE, SCREEN_WIDTH,
-                           SCREEN_HEIGHT, SPEED)
+from src.constants import (COLOR_BLACK, COLOR_GREEN, COLOR_RED,
+                           CELL_SIZE, SCREEN_WIDTH,
+                           SCREEN_HEIGHT, SPEED, PLAYER_COLORS,
+                           BOARD_WIDTH, BOARD_HEIGHT)
 from src.replay_manager import ReplayManager
 from agent.snake_agent import SnakeAgent
 from agent.state import State
@@ -18,94 +19,26 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.insert(0, project_root)
 
-# Define player colors for consistent visualization
-PLAYER_COLORS = [
-    {
-        "body": COLOR_BLUE,
-        "head": COLOR_HEAD
-    },  # Player 1 - Blue
-    {
-        "body": (255, 0, 255),
-        "head": (150, 0, 150)
-    },  # Player 2 - Purple
-    {
-        "body": (255, 165, 0),
-        "head": (200, 130, 0)
-    },  # Player 3 - Orange (if needed)
-    {
-        "body": (0, 255, 255),
-        "head": (0, 200, 200)
-    },  # Player 4 - Cyan (if needed)
-]
-
 
 def draw_board(screen, game_manager, episode=None, max_score=None):
-    """Draw the game board for a single player game"""
+    """
+    Draw the game board for a multi-player game with n players
+    and update window title with score
+    """
     screen.fill(COLOR_BLACK)
 
-    # Draw snake
-    for x, y in game_manager.snake.body:
-        rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-        pygame.draw.rect(screen, COLOR_BLUE, rect)
-        if (x, y) == game_manager.snake.head:
-            pygame.draw.rect(screen, COLOR_HEAD, rect)
-
-    # Draw apples
-    for apple in game_manager.apples:
-        x, y = apple.position
-        color = COLOR_GREEN if apple.color == "green" else COLOR_RED
-        apple_rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE,
-                                 CELL_SIZE)
-        pygame.draw.rect(screen, color, apple_rect)
-
-    # Add text display for episode and score information
-    if episode is not None:
-        font = pygame.font.SysFont('Arial', 20, bold=True)
-
-        # Render episode text
-        episode_text = font.render(f"Episode: {episode}", True,
-                                   (255, 255, 255))
-        screen.blit(episode_text, (10, 10))
-
-        # Render score text
-        score_text = font.render(f"Score: {game_manager.score}", True,
-                                 (255, 255, 255))
-        screen.blit(score_text, (10, 40))
-
-        # Render max score if available
-        if max_score is not None:
-            max_score_text = font.render(f"Max Score: {max_score}", True,
-                                         (255, 255, 255))
-            screen.blit(max_score_text, (10, 70))
-
-    pygame.display.flip()
-
-
-def draw_multi_player_board(screen,
-                            game_manager,
-                            episode=None,
-                            max_scores=None):
-    """Draw the game board for a multi-player game with n players"""
-    screen.fill(COLOR_BLACK)
-
-    # Draw all snakes - only draw snakes that are alive
     for i, snake in enumerate(game_manager.snakes):
-        # Skip drawing if the snake is dead
         if not game_manager.snake_alive[i]:
             continue
 
         if i < len(PLAYER_COLORS):
             color_data = PLAYER_COLORS[i]
-        else:
-            # Fallback color if we have more players than defined colors
-            color_data = {"body": (200, 200, 200), "head": (150, 150, 150)}
 
-        # Draw snake body
+        # Draw snake
         for x, y in snake.body:
             rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE,
                                CELL_SIZE)
             pygame.draw.rect(screen, color_data["body"], rect)
-            # Highlight the head
             if (x, y) == snake.head:
                 pygame.draw.rect(screen, color_data["head"], rect)
 
@@ -117,18 +50,88 @@ def draw_multi_player_board(screen,
                                  CELL_SIZE)
         pygame.draw.rect(screen, color, apple_rect)
 
+    # Update window title with score(s)
+    if hasattr(game_manager, "scores"):
+        score_str = " | ".join([f"Player {i+1}: {score}"
+                                for i, score in
+                                enumerate(game_manager.scores)])
+        title = f"Snake Game - {score_str}"
+        if episode is not None:
+            title += f" | Episode: {episode}"
+        if max_score is not None:
+            title += f" | Max Score: {max_score}"
+        pygame.display.set_caption(title)
+
     pygame.display.flip()
+
+
+def print_terminal_state(game_manager, snake_index=0):
+    """Print the snake's vision state in terminal as required by subject"""
+
+    if hasattr(game_manager, 'snake'):
+        snake = game_manager.snake
+    else:
+        snake = game_manager.snakes[snake_index]
+    head_x, head_y = snake.head
+
+    vision_map = {}
+
+    # mark snake body, head, and apples
+    for pos in snake.body:
+        vision_map[pos] = 'S'
+    vision_map[snake.head] = 'H'
+    for apple in game_manager.apples:
+        vision_map[apple.position] = 'G' if apple.color == 'green' else 'R'
+
+    # Find what the snake can see in each direction
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    visible_positions = set()
+    visible_positions.add(snake.head)
+
+    # Scan in this direction until we hit a wall
+    for dx, dy in directions:
+        x, y = head_x + dx, head_y + dy
+
+        while True:
+            if not (0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT):
+                vision_map[(x, y)] = 'W'
+                visible_positions.add((x, y))
+                break
+
+            visible_positions.add((x, y))
+
+            x += dx
+            y += dy
+
+    # Determine the bounds for printing
+    min_x = min(pos[0] for pos in visible_positions)
+    max_x = max(pos[0] for pos in visible_positions)
+    min_y = min(pos[1] for pos in visible_positions)
+    max_y = max(pos[1] for pos in visible_positions)
+
+    print("\n=== Snake Vision ===")
+    for y in range(min_y, max_y + 1):
+        line = ""
+        for x in range(min_x, max_x + 1):
+            pos = (x, y)
+            if pos in visible_positions:
+                if pos in vision_map:
+                    line += vision_map[pos] + " "
+                else:
+                    line += "0 "
+            else:
+                line += "  "
+        print(line.rstrip())
 
 
 def train_agent(sessions=100,
                 render=True,
-                render_every=100,
+                render_every=None,
                 save_every=100000,
                 model_path=None,
                 speed=SPEED,
                 num_players=1,
                 use_smart_exploration=False):
-    """Unified training function that handles any number of players"""
     if render:
         pygame.init()
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -138,37 +141,32 @@ def train_agent(sessions=100,
         )
         clock = pygame.time.Clock()
 
-    # Initialize agents - for multiplayer we always create fresh agents
-    # For single player, we can optionally load a model
+    # Initialize agents
     agents = []
     for i in range(num_players):
         agent = SnakeAgent(use_smart_exploration=use_smart_exploration)
-        # For single player only, we can load a pre-existing model
-        if i == 0 and num_players == 1 and model_path:
-            agent.load_model(model_path)
-            print(f"Loaded model from: {model_path}")
         agents.append(agent)
+    if model_path and num_players == 1:
+        agents[0].load_model(model_path)
 
     state_processor = State()
     reward_system = RewardSystem()
     replay_manager = ReplayManager()
 
-    # Track scores and stats for each agent
+    # Scores
     all_scores = [[] for _ in range(num_players)]
     max_scores = [3] * num_players
-    death_counters = [[0, 0, 0] for _ in range(num_players)]
 
     start_time = time.time()
 
     for episode in range(sessions):
         elapsed_time = time.time() - start_time
 
-        # Create a game with the specified number of players
         game_manager = GameManager(num_players=num_players)
         game_manager.reset_game()
 
         steps = 0
-        replay_manager.start_episode()
+        replay_manager.start_episode_recording()
         replay_manager.record_state(game_manager)
 
         # Get initial states for all agents
@@ -176,8 +174,10 @@ def train_agent(sessions=100,
             state_processor.get_state(game_manager, i)
             for i in range(num_players)
         ]
-
-        render_this_episode = render and (episode % render_every == 0)
+        if render_every is not None:
+            render_this_episode = render and (episode % render_every == 0)
+        else:
+            render_this_episode = False
 
         while not game_manager.game_over:
             if render_this_episode:
@@ -201,39 +201,25 @@ def train_agent(sessions=100,
                     actions.append(None)
                     action_indices.append(None)
 
-            # Store previous scores
-            if num_players == 1:
-                prev_score = game_manager.score
-            else:
-                prev_scores = game_manager.scores.copy()
-
             # Execute actions based on number of players
             if num_players == 1:
-                # Single player mode
                 game_over, score = game_manager.step(actions[0])
                 game_manager.game_over = game_over
                 scores = [score]
-
+                prev_score = game_manager.score
             else:
-                # Multi-player mode
                 game_over, scores, deaths = game_manager.step_multi_player(
                     actions)
                 game_manager.game_over = game_over
-
-                # Update death counters
-                for i, death in enumerate(deaths):
-                    if death is not None:
-                        death_counters[i][death] += 1
+                prev_scores = game_manager.scores.copy()
 
             replay_manager.record_state(game_manager)
 
-            # Calculate rewards and update agents
+            # Calculate rewards and update agents of the ones that are alive
             for i in range(num_players):
-                # Only process active snakes or those that just died
                 if num_players == 1 or game_manager.snake_alive[i] or (
                         deaths is not None and i < len(deaths)
                         and deaths[i] is not None):
-                    # Calculate reward
                     if num_players == 1:
                         reward = reward_system.calculate_reward(
                             game_manager, game_over, prev_score, scores[i])
@@ -253,7 +239,6 @@ def train_agent(sessions=100,
                             num_players=num_players,
                             player_index=i)
 
-                    # Get next state
                     next_state = state_processor.get_state(game_manager, i)
 
                     # Train the agent if it was active
@@ -265,30 +250,22 @@ def train_agent(sessions=100,
                         agents[i].train(current_states[i], action_indices[i],
                                         reward, next_state, is_done)
 
-                    # Update for next iteration
                     current_states[i] = next_state
 
             if render_this_episode:
-                if num_players == 1:
-                    draw_board(screen,
-                               game_manager,
-                               episode=episode,
-                               max_score=max_scores[0])
-                else:
-                    draw_multi_player_board(screen,
-                                            game_manager,
-                                            episode=episode,
-                                            max_scores=max_scores)
+                draw_board(screen,
+                           game_manager,
+                           episode=episode,
+                           max_score=max_scores[0])
+                print_terminal_state(game_manager)
                 clock.tick(speed)
 
             steps += 1
 
-        # Update game scores for tracking
-        if num_players == 1:
-            game_manager.score = scores[0]
 
         # Track the best episode for replay
         if num_players == 1:
+            game_manager.score = scores[0]
             replay_manager.end_episode(game_manager.score)
         else:
             max_score = max(game_manager.scores) if game_manager.scores else 0
@@ -332,9 +309,6 @@ def train_agent(sessions=100,
     # Save final models
     if num_players == 1:
         agent.save_model(f"models/final_model_{max_scores[0]}.pth")
-
-    # Plot results
-    if num_players == 1:
         plot_training_results(all_scores[0], np.mean(all_scores[0]))
 
     # Show the best replay at the end of training
@@ -377,110 +351,39 @@ def plot_training_results(scores, mean_scores, window_size=100):
     plt.show()
 
 
-def play_game(model_path=None, speed=SPEED, step_by_step=False):
+def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Snake Game")
+    pygame.display.set_caption(f"Snake Game - {num_players} {'Player' if num_players == 1 else 'Players'}")
     clock = pygame.time.Clock()
 
-    while True:
-        game_manager = GameManager()
-        game_manager.reset_game()
-
-        if model_path:
-            agent = SnakeAgent()
-            agent.load_model(model_path)
-            agent.epsilon = 0
-            stateProcessor = State()
-            print(f"AI playing with model: {model_path}")
-
-            advance_step = not step_by_step
-
-            while not game_manager.game_over:
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        pygame.quit()
-                        sys.exit()
-                    # Check for keypress in step-by-step mode
-                    elif step_by_step and event.type == pygame.KEYDOWN:
-                        if event.key == pygame.K_s:
-                            advance_step = True
-                        elif event.key == pygame.K_q:
-                            print("Quitting game...")
-                            pygame.quit()
-                            sys.exit()
-
-                if advance_step:
-                    current_state = stateProcessor.get_state(game_manager)
-                    action = agent.get_action(current_state)
-
-                    game_over, score = game_manager.step(action)
-                    game_manager.game_over = game_over
-                    game_manager.score = score
-
-                    # Reset the flag for step-by-step mode
-                    if step_by_step:
-                        advance_step = False
-
-                draw_board(screen, game_manager)
-                if step_by_step:
-                    font = pygame.font.SysFont('Arial', 20, bold=True)
-                    hint_text = font.render(
-                        "Press 's' for next step, 'q' to quit", True,
-                        (255, 255, 255))
-                    screen.blit(hint_text, (10, SCREEN_HEIGHT - 30))
-                    pygame.display.flip()
-
-                clock.tick(speed)
-
-            print(f"Game Over! Final Score: {game_manager.score}")
-
-
-def play_multi_player_game(model_paths=[],
-                           num_players=2,
-                           speed=SPEED,
-                           step_by_step=False):
-    """Play a game with multiple AI players - no human players"""
-    pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption(f"Snake Game - {num_players} Players")
-    clock = pygame.time.Clock()
-
-    # Ensure we have enough model paths
-    while len(model_paths) < num_players:
-        model_paths.append(None)  # Use default agent if no model specified
-
-    # Initialize agents - all AI
+    # Initialize agents for all players
     agents = []
     for i in range(num_players):
         agent = SnakeAgent()
-        if model_paths[i]:
-            agent.load_model(model_paths[i])
-        agent.epsilon = 0  # No exploration, just use the model
+        if model_path:
+            print(f"Loading model for player {i + 1} from {model_path[i]}")
+            agent.load_model(model_path)
+        agent.epsilon = 0  # No exploration
         agents.append(agent)
-        print(
-            f"Agent {i+1} playing with model: "
-            f"{model_paths[i] if model_paths[i] else 'default model'}"
-        )
+        
 
     state_processor = State()
 
     while True:
         game_manager = GameManager(num_players=num_players)
         game_manager.reset_game()
-
+        
         advance_step = not step_by_step
 
         while not game_manager.game_over:
-            actions = [None] * num_players
-
             # Process events
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
                 elif step_by_step and event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE:
+                    if event.key == pygame.K_s or event.key == pygame.K_SPACE:
                         advance_step = True
                     elif event.key == pygame.K_q:
                         print("Quitting game...")
@@ -488,33 +391,39 @@ def play_multi_player_game(model_paths=[],
                         sys.exit()
 
             if advance_step:
-                # Get actions for all AI players
-                for i, agent in enumerate(agents):
-                    if game_manager.snake_alive[i]:
-                        current_state = state_processor.get_state(
-                            game_manager, i)
-                        actions[i] = agent.get_action(current_state)
-
-                # Execute all actions
-                game_over, scores, _ = game_manager.step_multi_player(actions)
-                game_manager.game_over = game_over
-
+                if num_players == 1:
+                    current_state = state_processor.get_state(game_manager)
+                    action = agents[0].get_action(current_state)
+                    game_over, score = game_manager.step(action)
+                    game_manager.game_over = game_over
+                    game_manager.score = score
+                else:
+                    actions = [None] * num_players
+                    for i, agent in enumerate(agents):
+                        if game_manager.snake_alive[i]:
+                            current_state = state_processor.get_state(game_manager, i)
+                            actions[i] = agent.get_action(current_state)
+                    
+                    game_over, _, _ = game_manager.step_multi_player(actions)
+                    game_manager.game_over = game_over
+                
                 # Reset the flag for step-by-step mode
                 if step_by_step:
                     advance_step = False
 
-            # Draw the game board without score information
-            draw_multi_player_board(screen, game_manager)
+            draw_board(screen, game_manager)
+            print_terminal_state(game_manager)
 
             if step_by_step:
                 font = pygame.font.SysFont('Arial', 20, bold=True)
-                hint_text = font.render("Press SPACE for next step, Q to quit",
-                                        True, (255, 255, 255))
+                key_hint = "s" if num_players == 1 else "SPACE"
+                hint_text = font.render(f"Press '{key_hint}' for next step, 'q' to quit",
+                                      True, (255, 255, 255))
                 screen.blit(hint_text, (10, SCREEN_HEIGHT - 30))
                 pygame.display.flip()
 
             clock.tick(speed)
-
+            
 
 def main():
     parser = argparse.ArgumentParser(
@@ -532,19 +441,15 @@ def main():
                         type=int,
                         default=1000,
                         help='Number of training sessions (default: 1000)')
-    parser.add_argument('-r',
-                        '--render',
-                        action='store_true',
-                        help='Enable rendering during training')
     parser.add_argument('-ds',
                         '--display-speed',
                         type=int,
                         default=SPEED,
                         help='Speed of the game (default: 24)')
-    parser.add_argument('-re',
-                        '--render-every',
+    parser.add_argument('-r',
+                        '--render',
                         type=int,
-                        default=100,
+                        default=None,
                         help='Render every N sessions (default: 100)')
     parser.add_argument(
         '-se',
@@ -584,19 +489,18 @@ def main():
         train_agent(
             sessions=args.sessions,
             render=args.render,
-            render_every=args.render_every,
+            render_every=args.render,
             save_every=args.save_every,
             model_path=args.model_path if args.num_players == 1 else None,
             speed=args.display_speed,
             num_players=args.num_players,
             use_smart_exploration=args.smart_exploration)
     elif args.mode == 'play':
-        # Play mode with any number of players
-        if args.num_players == 1:
-            # Single player mode
-            play_game(model_path=args.model_path,
-                      speed=args.display_speed,
-                      step_by_step=args.step_by_step)
+        # Unified play function for any number of players
+        play_game(model_path=args.model_path,
+                  num_players=args.num_players,
+                  speed=args.display_speed,
+                  step_by_step=args.step_by_step)
 
     pygame.quit()
     print("Game exited successfully.")

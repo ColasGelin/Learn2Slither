@@ -36,15 +36,10 @@ class SnakeAgent:
         self.update_target_frequency = update_target_frequency
         self.step_counter = step_counter
 
-        # Modify the epsilon decay to be slower
-        self.epsilon_decay = 0.9995  # Slower decay for more exploration
-
     def get_action(self, state_or_game_manager):
-        # Check if the input is already a state array or if it's a game_manager
         if isinstance(state_or_game_manager, np.ndarray):
             current_state = state_or_game_manager
         else:
-            # It's a game_manager object
             current_state = self.state_processor.get_state(
                 state_or_game_manager)
 

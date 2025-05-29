@@ -21,27 +21,29 @@ RIGHT = (1, 0)
 NUM_GREEN_APPLES = 2
 NUM_RED_APPLES = 1
 
-
 class CellType(Enum):
     EMPTY = 0
     WALL = 1
-    SNAKE_HEAD = 2
-    SNAKE_BODY = 3
-    GREEN_APPLE = 4
-    RED_APPLE = 5
-
-
-VISION_CHAR_MAP = {
-    CellType.EMPTY: '0',
-    CellType.WALL: 'W',
-    CellType.SNAKE_HEAD: 'H',
-    CellType.SNAKE_BODY: 'S',
-    CellType.GREEN_APPLE: 'G',
-    CellType.RED_APPLE: 'R'
-}
 
 COLOR_BLACK = (0, 0, 0)
-COLOR_HEAD = (0, 0, 150)
 COLOR_GREEN = (0, 255, 0)
 COLOR_RED = (255, 0, 0)
-COLOR_BLUE = (0, 0, 255)  # For snake
+
+PLAYER_COLORS = [
+    {
+        "body": (0, 0, 255),
+        "head": (0, 0, 150)
+    },
+    {
+        "body": (255, 0, 255),
+        "head": (150, 0, 150)
+    },
+    {
+        "body": (255, 165, 0),
+        "head": (200, 130, 0)
+    }, 
+    {
+        "body": (0, 255, 255),
+        "head": (0, 200, 200)
+    },
+]

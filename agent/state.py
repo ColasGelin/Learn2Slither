@@ -5,9 +5,7 @@ from src.constants import BOARD_WIDTH, BOARD_HEIGHT, AGENT_STATE_SIZE
 class State:
 
     def __init__(self):
-        # We'll still use this for normalization,
-        # but only based on what the snake sees
-        self.max_possible_distance = max(BOARD_WIDTH, BOARD_HEIGHT)
+        pass
 
     def _normalize_distance(self, distance):
         # Inverse distance scaling: closer objects have higher values
@@ -15,52 +13,51 @@ class State:
 
     def get_state(self, game_manager, snake_index=0):
         """
-        Get the state representation for the specified snake
-        in a multi-snake environment
+        Returns a numpy array representing the state for the specified snake.
+
+        State representation:
+        - state[0:4]: One-hot encoding of the snake's current direction:
+            [LEFT, RIGHT, UP, DOWN]
+        - For each direction (LEFT, RIGHT, UP, DOWN), the following 5 features are included:
+            - [i]: 1 if the first object in this direction is a snake (own or opponent), else 0
+            - [i+1]: 1 if the first object is a green apple, else 0
+            - [i+2]: 1 if the first object is a red apple, else 0
+            - [i+3]: 1 if the first object is a wall, else 0
+            - [i+4]: Normalized inverse distance to the first object in this direction (0 if nothing found)
         """
-        # Check if we're in multi-player mode
-        multi_player = hasattr(game_manager, 'snakes') and len(
+        multiplayer = hasattr(game_manager, 'snakes') and len(
             game_manager.snakes) > 1
 
-        if multi_player:
-            # Make sure snake_index is valid
+        if not multiplayer:
+            return self.process_single_snake_state(game_manager)
+        else:
             if snake_index >= len(game_manager.snakes):
                 raise ValueError(
                     f"Invalid snake index {snake_index}. "
                     f"Only {len(game_manager.snakes)} snakes available."
                 )
 
-            # Get the current snake
             current_snake = game_manager.snakes[snake_index]
-
-            # Get all other snakes as opponents
             opponent_snakes = [
                 snake for i, snake in enumerate(game_manager.snakes)
                 if i != snake_index and game_manager.snake_alive[i]
             ]
 
-            # Process state with awareness of all snakes
             return self.process_multi_snake_state(game_manager, current_snake,
                                                   opponent_snakes)
-        else:
-            # Single snake mode
-            return self.process_single_snake_state(game_manager)
+            
 
     def process_single_snake_state(self, game_manager):
-        """Process state for single-snake environment"""
         snake = game_manager.snake
         state = np.zeros(AGENT_STATE_SIZE)
         head_x, head_y = snake.head
 
-        # Current direction one-hot encoding (4 values)
         state[0] = 1 if snake.direction == (-1, 0) else 0  # LEFT
         state[1] = 1 if snake.direction == (1, 0) else 0  # RIGHT
         state[2] = 1 if snake.direction == (0, -1) else 0  # UP
         state[3] = 1 if snake.direction == (0, 1) else 0  # DOWN
 
-        # Define the four directions to scan
         directions = [
-            # (dx, dy, state_offset)
             (-1, 0, 4),  # LEFT
             (1, 0, 9),  # RIGHT
             (0, -1, 14),  # UP
@@ -79,23 +76,20 @@ class State:
         state = np.zeros(AGENT_STATE_SIZE)
         head_x, head_y = current_snake.head
 
-        # Current direction one-hot encoding (4 values)
         state[0] = 1 if current_snake.direction == (-1, 0) else 0  # LEFT
         state[1] = 1 if current_snake.direction == (1, 0) else 0  # RIGHT
         state[2] = 1 if current_snake.direction == (0, -1) else 0  # UP
         state[3] = 1 if current_snake.direction == (0, 1) else 0  # DOWN
 
-        # Define the four directions to scan
         directions = [
-            # (dx, dy, state_offset)
             (-1, 0, 4),  # LEFT
             (1, 0, 9),  # RIGHT
             (0, -1, 14),  # UP
             (0, 1, 19)  # DOWN
         ]
 
-        # Get obstacles: own body (except head) and opponent snakes' bodies
-        own_body = [current_snake.body[1:]]  # Skip head
+        # Get own body and opponent snakes' bodies
+        own_body = [current_snake.body[1:]] 
         opponent_bodies = [snake.body for snake in opponent_snakes]
 
         for dx, dy, offset in directions:
@@ -121,57 +115,37 @@ class State:
         """
         head_x, head_y = head_pos
         object_detected = "none"
-        distance = 0
 
         # Start looking from the adjacent cell in the given direction
         x, y = head_x + dx, head_y + dy
-        distance = 1  # Start with distance 1 (adjacent cell)
+        distance = 1
 
         # Continue looking in this direction until we hit something
         while 0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT:
-            # Check for own snake body
             position = (x, y)
             for body in own_bodies:
                 if position in body:
                     object_detected = "snake"
                     break
 
-            # If already found something, don't check further
-            if object_detected != "none":
-                break
-
-            # Check for opponent snakes
             for body in opponent_bodies:
                 if position in body:
                     object_detected = "opponent_snake"
                     break
 
-            # If already found something, don't check further
-            if object_detected != "none":
-                break
-
-            # Check for apples
             for apple in apples:
                 if position == apple.position:
                     object_detected = f"{apple.color}_apple"
                     break
 
-            # If already found something, don't check further
-            if object_detected != "none":
-                break
-
-            # Move to next cell in this direction
             x += dx
             y += dy
             distance += 1
 
-        # If we exited the loop without finding
-        # anything inside the board, it's a wall
-        if object_detected == "none" and not (0 <= x < BOARD_WIDTH
-                                              and 0 <= y < BOARD_HEIGHT):
+        if not (0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT):
             object_detected = "wall"
 
-        # Update state based on what was detected
+        # Update state
         state[offset] = 1 if object_detected in ["snake", "opponent_snake"
                                                  ] else 0
         state[offset + 1] = 1 if object_detected == "green_apple" else 0
