@@ -43,22 +43,19 @@ class SnakeAgent:
             current_state = self.state_processor.get_state(
                 state_or_game_manager)
 
-        # With probability epsilon, choose a random action (exploration)
+        # Exploration 
         if random.random() < self.agent.epsilon:
-            # Introduce smart exploration
             if self.use_smart_exploration:
-                # Get valid actions that don't lead to immediate death
-                valid_actions = self.get_valid_actions(current_state)
+                valid_actions = self._get_valid_actions(current_state)
                 if valid_actions:
                     action_idx = self.actions.index(
                         random.choice(valid_actions))
                 else:
-                    # If no valid actions, fallback to agent's action
                     action_idx = self.agent.get_action(current_state)
             else:
                 action_idx = self.agent.get_action(current_state)
         else:
-            # Otherwise, use policy (exploitation)
+            # Exploitation
             state_tensor = torch.FloatTensor(current_state).unsqueeze(0).to(
                 self.agent.device)
             q_values = self.agent.policy_net(state_tensor)
@@ -87,27 +84,21 @@ class SnakeAgent:
         self.agent.load(path)
 
     # Add method to predict valid moves
-    def get_valid_actions(self, state):
+    def _get_valid_actions(self, state):
         """Get actions that don't lead to immediate death based on state"""
         valid_actions = []
 
-        # Direction indices: [LEFT, RIGHT, UP, DOWN]
         current_direction_idx = -1
         for i in range(4):
             if state[i] == 1:
                 current_direction_idx = i
                 break
 
-        # Check each direction's immediate danger (wall or snake)
-        # We'll check state offsets [4+3, 9+3, 14+3, 19+3]
-        # which is where walls are indicated
-        # And offsets [4+0, 9+0, 14+0, 19+0]
-        # which is where snakes are indicated
         direction_offsets = [4, 9, 14, 19]
         directions = [LEFT, RIGHT, UP, DOWN]
 
+        # Skip if trying to go backwards (into snake own body)
         for i, direction in enumerate(directions):
-            # Skip if trying to go backwards (opposite of current direction)
             if current_direction_idx != -1:
                 if (i == 0 and current_direction_idx == 1) or \
                    (i == 1 and current_direction_idx == 0) or \
@@ -120,8 +111,6 @@ class SnakeAgent:
             snake_indicator = state[direction_offsets[i]]
             dist_to_obstacle = state[direction_offsets[i] + 4]
 
-            # If there's no immediate wall or snake (distance > 1),
-            # the move is valid
             if (wall_indicator == 0 or dist_to_obstacle < 0.99) and \
                (snake_indicator == 0 or dist_to_obstacle < 0.99):
                 valid_actions.append(direction)

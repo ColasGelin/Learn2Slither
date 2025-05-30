@@ -243,7 +243,6 @@ def train_agent(sessions=100,
 
                     # Train the agent if it was active
                     if action_indices[i] is not None:
-                        # For done status, use appropriate game over condition
                         is_done = game_over if num_players == 1 else (
                             deaths is not None and i < len(deaths)
                             and deaths[i] is not None)
@@ -261,7 +260,6 @@ def train_agent(sessions=100,
                 clock.tick(speed)
 
             steps += 1
-
 
         # Track the best episode for replay
         if num_players == 1:

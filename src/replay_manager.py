@@ -12,7 +12,6 @@ class ReplayManager:
         self.best_replay = []
         self.best_score = 0
         self.current_replay = []
-        self.episodes = []
         self.best_combined_score = 0
         self.best_combined_replay = []
 
@@ -58,15 +57,8 @@ class ReplayManager:
         """Check if this is the best replay"""
         is_best = False
         
-        # Check for best individual score
-        if score > self.best_score:
-            self.best_score = score
-            self.best_replay = self.current_replay.copy()
-            is_best = True
-
-        # Check for best mean score in multi-player mode
-        if self.current_replay and self.current_replay[0].get(
-                'multi_player', False):
+        # If multiplayer get harmonic mean to find most interesting replay
+        if self.current_replay and self.current_replay[0].get('multi_player', False):
             final_state = self.current_replay[-1]
             player_scores = [
                 player['score'] for player in final_state['players']
@@ -74,13 +66,15 @@ class ReplayManager:
             if player_scores and all(score > 0 for score in player_scores):
                 harmonic_mean = len(player_scores) / sum(
                     1 / score for score in player_scores)
-                if harmonic_mean > self.best_combined_score:
-                    self.best_combined_score = harmonic_mean
-                    self.best_combined_replay = self.current_replay.copy()
+                if harmonic_mean > self.best_score:
+                    self.best_score = harmonic_mean
+                    self.best_replay = self.current_replay.copy()
                     is_best = True
-
-        if is_best:
-            self.episodes.append(self.current_replay)
+        else:
+            if score > self.best_score:
+                self.best_score = score
+                self.best_replay = self.current_replay.copy()
+                is_best = True
 
         self.current_replay = []
 
@@ -92,18 +86,17 @@ class ReplayManager:
 
     def play_best(self, speed=24):
         """Play the best recorded replay based on mode"""
-        if hasattr(self, 'best_combined_replay') and self.best_combined_replay:
-            # For multi-player mode, show the best combined score replay
-            if self.best_combined_replay and self.best_combined_replay[0].get(
-                    'multi_player', False):
-                return self._play_replay(self.best_combined_replay,
-                                         self.best_combined_score,
-                                         speed,
-                                         is_combined=True)
+        if not self.best_replay:
+            print("No replay available")
+            return
+            
+        # Determine if this is a multiplayer replay
+        is_multiplayer = (self.best_replay and 
+                        self.best_replay[0].get('multi_player', False))
+        
+        return self._play_replay(self.best_replay, speed, is_combined=is_multiplayer, score=self.best_score)
 
-        return self._play_replay(self.best_replay, self.best_score, speed)
-
-    def _play_replay(self, replay, speed=24, is_combined=False):
+    def _play_replay(self, replay, speed=24, is_combined=False, score=0):
         """Helper method to play a specific replay"""
         if not replay:
             print("No replay available")
@@ -112,7 +105,7 @@ class ReplayManager:
         pygame.init()
 
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        title = f"Best {'Combined ' if is_combined else ''}Replay"
+        title = f"Best {'Combined ' if is_combined else ''}Replay - {score}"
         pygame.display.set_caption(title)
         clock = pygame.time.Clock()
 
