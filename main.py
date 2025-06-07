@@ -201,17 +201,16 @@ def train_agent(sessions=100,
                     actions.append(None)
                     action_indices.append(None)
 
-            # Execute actions based on number of players
             if num_players == 1:
+                prev_score = game_manager.score
                 game_over, score = game_manager.step(actions[0])
                 game_manager.game_over = game_over
                 scores = [score]
-                prev_score = game_manager.score
             else:
+                prev_scores = game_manager.scores.copy()
                 game_over, scores, deaths = game_manager.step_multi_player(
                     actions)
                 game_manager.game_over = game_over
-                prev_scores = game_manager.scores.copy()
 
             replay_manager.record_state(game_manager)
 
