@@ -70,7 +70,7 @@ class SnakeAgent:
         if (len(self.replay_buffer) > self.batch_size
                 and self.step_counter % self.update_target_frequency == 0):
             experiences = self.replay_buffer.sample(self.batch_size)
-            loss = self.agent.learn(experiences, self.batch_size)
+            loss = self.agent.learn(experiences)
             return loss
         return None
 

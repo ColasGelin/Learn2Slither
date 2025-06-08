@@ -54,7 +54,7 @@ class DQNAgent:
         self.gamma = gamma
         self.action_size = action_size
 
-        # Used to know when to update the target network
+        # When to update the target network
         self.learn_step_counter = 0
 
     def get_action(self, state):
@@ -70,9 +70,11 @@ class DQNAgent:
             action = torch.argmax(q_values).item()
         return action
 
-    def learn(self, experiences, batch_size=None):
+    def learn(self, experiences):
         states, actions, rewards, next_states, dones = experiences
 
+        # Convert to torch tensors and move to GPU if available
+        # add an extra dimension for matrix operations
         states_tensor = torch.FloatTensor(states).to(self.device)
         actions_tensor = torch.LongTensor(actions).unsqueeze(1).to(self.device)
         rewards_tensor = torch.FloatTensor(rewards).unsqueeze(1).to(
@@ -80,6 +82,7 @@ class DQNAgent:
         next_states_tensor = torch.FloatTensor(next_states).to(self.device)
         dones_tensor = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
 
+        # Get current Q-values and next Q-values for each state-action pair
         q_values = self.policy_net(states_tensor).gather(1, actions_tensor)
 
         next_actions = self.policy_net(next_states_tensor).max(1)[1].unsqueeze(

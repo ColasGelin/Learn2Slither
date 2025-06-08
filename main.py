@@ -305,7 +305,9 @@ def train_agent(sessions=100,
 
     # Save final models
     if num_players == 1:
-        agent.save_model(f"models/final_model_{max_scores[0]}.pth")
+        agent.save_model(f"models/sess{episode + 1}-"
+                 f"max{max_scores[0]}-"
+                 f"sm{1 if use_smart_exploration else 0}.pth")
         plot_training_results(all_scores[0], np.mean(all_scores[0]))
 
     # Show the best replay at the end of training
@@ -344,6 +346,8 @@ def plot_training_results(scores, mean_scores, window_size=100):
     plt.tight_layout()
     plt.savefig('training_results.png')
     print("Plot saved as 'training_results.png'")
+    
+    plt.show()
 
 
 def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):

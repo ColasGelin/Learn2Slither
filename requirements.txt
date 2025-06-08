@@ -2,3 +2,4 @@ pygame
 numpy
 matplotlib
 torch
+flake8
