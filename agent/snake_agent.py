@@ -43,7 +43,7 @@ class SnakeAgent:
             current_state = self.state_processor.get_state(
                 state_or_game_manager)
 
-        # Exploration 
+        # Exploration
         if random.random() < self.agent.epsilon:
             if self.use_smart_exploration:
                 valid_actions = self._get_valid_actions(current_state)

@@ -1,5 +1,3 @@
-import pickle
-import os
 import pygame
 from .constants import (COLOR_BLACK, COLOR_GREEN, COLOR_RED,
                         SCREEN_WIDTH, SCREEN_HEIGHT, CELL_SIZE,
@@ -56,9 +54,10 @@ class ReplayManager:
     def end_episode(self, score):
         """Check if this is the best replay"""
         is_best = False
-        
+
         # If multiplayer get harmonic mean to find most interesting replay
-        if self.current_replay and self.current_replay[0].get('multi_player', False):
+        if (self.current_replay and
+           self.current_replay[0].get('multi_player', False)):
             final_state = self.current_replay[-1]
             player_scores = [
                 player['score'] for player in final_state['players']
@@ -89,12 +88,14 @@ class ReplayManager:
         if not self.best_replay:
             print("No replay available")
             return
-            
+
         # Determine if this is a multiplayer replay
-        is_multiplayer = (self.best_replay and 
-                        self.best_replay[0].get('multi_player', False))
-        
-        return self._play_replay(self.best_replay, speed, is_combined=is_multiplayer, score=self.best_score)
+        is_multiplayer = (self.best_replay and
+                          self.best_replay[0].get('multi_player', False))
+
+        return self._play_replay(self.best_replay, speed,
+                                 is_combined=is_multiplayer,
+                                 score=self.best_score)
 
     def _play_replay(self, replay, speed=24, is_combined=False, score=0):
         """Helper method to play a specific replay"""

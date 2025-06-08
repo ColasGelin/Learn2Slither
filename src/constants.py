@@ -21,9 +21,11 @@ RIGHT = (1, 0)
 NUM_GREEN_APPLES = 2
 NUM_RED_APPLES = 1
 
+
 class CellType(Enum):
     EMPTY = 0
     WALL = 1
+
 
 COLOR_BLACK = (0, 0, 0)
 COLOR_GREEN = (0, 255, 0)
@@ -41,7 +43,7 @@ PLAYER_COLORS = [
     {
         "body": (255, 165, 0),
         "head": (200, 130, 0)
-    }, 
+    },
     {
         "body": (0, 255, 255),
         "head": (0, 200, 200)

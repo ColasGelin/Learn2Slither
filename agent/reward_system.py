@@ -58,7 +58,7 @@ class RewardSystem:
             if player_index >= len(
                     game_manager.snakes
             ) or not game_manager.snake_alive[player_index]:
-                return 0 
+                return 0
             head_pos = game_manager.snakes[player_index].head
 
         # Find distance to nearest green apple
@@ -101,7 +101,7 @@ class RewardSystem:
                 other_snakes_avg_length /= active_other_snakes
                 length_advantage = (current_length -
                                     other_snakes_avg_length) * 0.01
-                reward += length_advantage 
+                reward += length_advantage
 
         return reward
 

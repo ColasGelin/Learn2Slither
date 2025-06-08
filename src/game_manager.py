@@ -1,4 +1,5 @@
-from src.constants import BOARD_WIDTH, BOARD_HEIGHT, NUM_GREEN_APPLES, NUM_RED_APPLES
+from src.constants import (BOARD_WIDTH, BOARD_HEIGHT,
+                           NUM_GREEN_APPLES, NUM_RED_APPLES)
 from src.snake import Snake
 from src.board import Board
 from src.apple import Apple

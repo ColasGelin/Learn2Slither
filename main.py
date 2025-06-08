@@ -135,9 +135,9 @@ def train_agent(sessions=100,
     if render:
         pygame.init()
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        caption_mode = 'Player' if num_players == 1 else 'Players'
         pygame.display.set_caption(
-            f"Snake Game - {num_players} {'Player' if num_players == 1
-                                          else 'Players'}"
+            f"Snake Game - {num_players} {caption_mode}"
         )
         clock = pygame.time.Clock()
 
@@ -351,7 +351,10 @@ def plot_training_results(scores, mean_scores, window_size=100):
 def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption(f"Snake Game - {num_players} {'Player' if num_players == 1 else 'Players'}")
+    caption_mode = 'Player' if num_players == 1 else 'Players'
+    pygame.display.set_caption(
+        f"Snake Game - {num_players} {caption_mode}"
+    )
     clock = pygame.time.Clock()
 
     # Initialize agents for all players
@@ -363,14 +366,13 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
             agent.load_model(model_path)
         agent.epsilon = 0  # No exploration
         agents.append(agent)
-        
 
     state_processor = State()
 
     while True:
         game_manager = GameManager(num_players=num_players)
         game_manager.reset_game()
-        
+
         advance_step = not step_by_step
 
         while not game_manager.game_over:
@@ -398,12 +400,12 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
                     actions = [None] * num_players
                     for i, agent in enumerate(agents):
                         if game_manager.snake_alive[i]:
-                            current_state = state_processor.get_state(game_manager, i)
-                            actions[i] = agent.get_action(current_state)
-                    
+                            s = state_processor.get_state(game_manager, i)
+                            actions[i] = agent.get_action(s)
+
                     game_over, _, _ = game_manager.step_multi_player(actions)
                     game_manager.game_over = game_over
-                
+
                 # Reset the flag for step-by-step mode
                 if step_by_step:
                     advance_step = False
@@ -414,13 +416,14 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
             if step_by_step:
                 font = pygame.font.SysFont('Arial', 20, bold=True)
                 key_hint = "s" if num_players == 1 else "SPACE"
-                hint_text = font.render(f"Press '{key_hint}' for next step, 'q' to quit",
-                                      True, (255, 255, 255))
+                hint_text = font.render(
+                    f"Press '{key_hint}' for next step, 'q' to quit",
+                    True, (255, 255, 255))
                 screen.blit(hint_text, (10, SCREEN_HEIGHT - 30))
                 pygame.display.flip()
 
             clock.tick(speed)
-            
+
 
 def main():
     parser = argparse.ArgumentParser(
