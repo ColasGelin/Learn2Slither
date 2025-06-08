@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV=/home/cgelin/42Projects/Learn2Slither/venv
+VIRTUAL_ENV=/sgoinfre/students/cgelin/Learn2Slither/venv
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

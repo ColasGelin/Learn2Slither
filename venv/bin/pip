@@ -1,4 +1,4 @@
-#!/home/cgelin/42Projects/Learn2Slither/venv/bin/python3
+#!/sgoinfre/students/cgelin/Learn2Slither/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys

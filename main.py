@@ -345,8 +345,6 @@ def plot_training_results(scores, mean_scores, window_size=100):
     plt.savefig('training_results.png')
     print("Plot saved as 'training_results.png'")
 
-    plt.show()
-
 
 def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
     pygame.init()
