@@ -18,30 +18,17 @@ class RewardSystem:
         self.prev_distance_to_apple = {}  # Dictionary to track per player
 
     def calculate_reward(self,
-                         game_manager,
-                         game_over,
-                         prev_score,
-                         new_score,
-                         num_players=1,
-                         player_index=0):
-        """
-        Calculate the reward based on the game state and outcome.
-        Args:
-            game_manager: The current game state
-            game_over: Whether the game has ended for this player
-            prev_score: Score before the action
-            new_score: Score after the action
-            num_players: Number of players in the game (default: 1)
-            player_index: Index of the player to calculate reward for
-        Returns:
-            float: The calculated reward
-        """
+                     game_manager,
+                     game_over,
+                     prev_score,
+                     new_score,
+                     num_players=1,
+                     player_index=0):
         reward = 0
 
         if game_over:
             return self.collision_penalty
 
-        # Green and red apple rewards
         if new_score > prev_score:
             reward += self.apple_reward * (new_score - prev_score)
             if player_index in self.prev_distance_to_apple:
@@ -51,7 +38,6 @@ class RewardSystem:
             reward += self.bad_apple_penalty
             return reward
 
-        # Distance-based rewards
         if num_players == 1:
             head_pos = game_manager.snake.head
         else:
@@ -61,15 +47,17 @@ class RewardSystem:
                 return 0
             head_pos = game_manager.snakes[player_index].head
 
-        # Find distance to nearest green apple
         min_distance_to_apple = float('inf')
+        
         for apple in game_manager.apples:
             if apple.color == "green":
                 apple_pos = apple.position
-                distance = self._calculate_distance(head_pos, apple_pos)
-                min_distance_to_apple = min(min_distance_to_apple, distance)
+                
+                # Check if apple is visible in horizontal or vertical line from head
+                if apple_pos[0] == head_pos[0] or apple_pos[1] == head_pos[1]:
+                    distance = self._calculate_distance(head_pos, apple_pos)
+                    min_distance_to_apple = min(min_distance_to_apple, distance)
 
-        # If we have a previous distance to compare with
         if (player_index in self.prev_distance_to_apple
                 and self.prev_distance_to_apple[player_index] is not None
                 and min_distance_to_apple < float('inf')):
@@ -79,14 +67,11 @@ class RewardSystem:
                 1 / (min_distance_to_apple + 1))
             reward += distance_reward
 
-        # Update distance for next step
         if min_distance_to_apple < float('inf'):
             self.prev_distance_to_apple[player_index] = min_distance_to_apple
 
-        # Default small penalty to encourage efficiency
         reward += self.base_move_penalty
 
-        # Additional rewards specific to multiplayer (bonus for being longer)
         if num_players > 1:
             current_length = len(game_manager.snakes[player_index].body)
             other_snakes_avg_length = 0

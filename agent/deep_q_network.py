@@ -33,7 +33,7 @@ class DQNAgent:
                  gamma=0.99,
                  epsilon_start=0.9,
                  epsilon_min=0.2,
-                 epsilon_decay=0.999):
+                 epsilon_decay=0.995):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu")
 
