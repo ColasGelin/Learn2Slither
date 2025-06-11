@@ -19,16 +19,18 @@ class RewardSystem:
 
     def calculate_reward(self,
                      game_manager,
-                     game_over,
+                     just_died,
                      prev_score,
                      new_score,
                      num_players=1,
                      player_index=0):
         reward = 0
 
-        if game_over:
+        # Death penalty
+        if just_died:
             return self.collision_penalty
 
+        # Apple reward
         if new_score > prev_score:
             reward += self.apple_reward * (new_score - prev_score)
             if player_index in self.prev_distance_to_apple:
@@ -49,6 +51,7 @@ class RewardSystem:
 
         min_distance_to_apple = float('inf')
         
+        # Check for green apples in horizontal or vertical line from head
         for apple in game_manager.apples:
             if apple.color == "green":
                 apple_pos = apple.position
@@ -58,6 +61,7 @@ class RewardSystem:
                     distance = self._calculate_distance(head_pos, apple_pos)
                     min_distance_to_apple = min(min_distance_to_apple, distance)
 
+        # Gives reward for approaching the apple
         if (player_index in self.prev_distance_to_apple
                 and self.prev_distance_to_apple[player_index] is not None
                 and min_distance_to_apple < float('inf')):
@@ -70,8 +74,10 @@ class RewardSystem:
         if min_distance_to_apple < float('inf'):
             self.prev_distance_to_apple[player_index] = min_distance_to_apple
 
+        # Base move penalty
         reward += self.base_move_penalty
 
+        # Multiplayer length advantage
         if num_players > 1:
             current_length = len(game_manager.snakes[player_index].body)
             other_snakes_avg_length = 0
@@ -91,9 +97,10 @@ class RewardSystem:
         return reward
 
     def _calculate_distance(self, pos1, pos2):
-        """Calculate Manhattan distance between two positions"""
-        return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
+        if pos1[0] == pos2[0]:  
+            return abs(pos1[1] - pos2[1])
+        elif pos1[1] == pos2[1]:  
+            return abs(pos1[0] - pos2[0])
 
     def reset(self):
-        """Reset the reward system for a new episode"""
         self.prev_distance_to_apple = {}

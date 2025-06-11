@@ -63,7 +63,6 @@ class StatsOverlay:
         self.stats_calculated = True
     
     def _calculate_improvement_rate(self, scores_array):
-        """Calculate improvement rate comparing first and last quarters"""
         if len(scores_array) < 4:
             return 0.0
             

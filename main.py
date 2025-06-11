@@ -160,6 +160,7 @@ def train_agent(sessions=100,
 
     start_time = time.time()
 
+    # EPISODE LOOP
     for episode in range(sessions):
         elapsed_time = time.time() - start_time
 
@@ -170,7 +171,6 @@ def train_agent(sessions=100,
         replay_manager.start_episode_recording()
         replay_manager.record_state(game_manager)
 
-        # Get initial states for all agents
         current_states = [
             state_processor.get_state(game_manager, i)
             for i in range(num_players)
@@ -180,6 +180,7 @@ def train_agent(sessions=100,
         else:
             render_this_episode = False
 
+        # STEP LOOP
         while not game_manager.game_over:
             if render_this_episode:
                 for event in pygame.event.get():
@@ -187,10 +188,10 @@ def train_agent(sessions=100,
                         pygame.quit()
                         sys.exit()
 
-            # Get actions from all agents
             actions = []
             action_indices = []
 
+            # get actions from agents
             for i, agent in enumerate(agents):
                 if i < num_players and (num_players == 1
                                         or game_manager.snake_alive[i]):
@@ -199,11 +200,13 @@ def train_agent(sessions=100,
                     actions.append(action)
                     action_indices.append(action_idx)
                 else:
+                    # Dead snakes
                     actions.append(None)
                     action_indices.append(None)
 
+            # Make the move
             if num_players == 1:
-                prev_score = game_manager.score
+                prev_scores = [game_manager.score]
                 game_over, score = game_manager.step(actions[0])
                 game_manager.game_over = game_over
                 scores = [score]
@@ -215,41 +218,39 @@ def train_agent(sessions=100,
 
             replay_manager.record_state(game_manager)
 
-            # Calculate rewards and update agents of the ones that are alive
+            # Calculate rewards (snakes alive or that just died)
             for i in range(num_players):
                 if num_players == 1 or game_manager.snake_alive[i] or (
                         deaths is not None and i < len(deaths)
                         and deaths[i] is not None):
                     if num_players == 1:
-                        reward = reward_system.calculate_reward(
-                            game_manager, game_over, prev_score, scores[i])
+                        just_died = game_over
                     else:
-                        is_dead = deaths is not None and i < len(
-                            deaths) and deaths[i] is not None
+                        just_died = deaths is not None and i < len(deaths) and deaths[i] is not None
+                        
+                    player_prev_score = prev_scores[i] if i < len(
+                        prev_scores) else 0
+                    player_new_score = scores[i] if i < len(scores) else 0
 
-                        player_prev_score = prev_scores[i] if i < len(
-                            prev_scores) else 0
-                        player_new_score = scores[i] if i < len(scores) else 0
+                    reward = reward_system.calculate_reward(
+                        game_manager,
+                        just_died,
+                        player_prev_score,
+                        player_new_score,
+                        num_players=num_players,
+                        player_index=i)
 
-                        reward = reward_system.calculate_reward(
-                            game_manager,
-                            is_dead,
-                            player_prev_score,
-                            player_new_score,
-                            num_players=num_players,
-                            player_index=i)
+                next_state = state_processor.get_state(game_manager, i)
 
-                    next_state = state_processor.get_state(game_manager, i)
+                    # Train the agent when agent dies
+                if action_indices[i] is not None:
+                    is_done = game_over if num_players == 1 else (
+                        deaths is not None and i < len(deaths)
+                        and deaths[i] is not None)
+                    agents[i].train(current_states[i], action_indices[i],
+                                    reward, next_state, is_done)
 
-                    # Train the agent if it was active
-                    if action_indices[i] is not None:
-                        is_done = game_over if num_players == 1 else (
-                            deaths is not None and i < len(deaths)
-                            and deaths[i] is not None)
-                        agents[i].train(current_states[i], action_indices[i],
-                                        reward, next_state, is_done)
-
-                    current_states[i] = next_state
+                current_states[i] = next_state
 
             if render_this_episode:
                 draw_board(screen,

@@ -84,13 +84,6 @@ class GameManager:
             self.place_apple(color="green")
 
     def step(self, action):
-        """
-        Single player step function
-        (preserved for backward compatibility)
-        """
-        if self.num_players > 1:
-            return self.step_multi_player([action])
-
         if self.game_over:
             return True, self.score
 
@@ -147,7 +140,6 @@ class GameManager:
         return False
 
     def check_snake_collisions(self, snake_index):
-        """Check various collision types for a specific snake"""
         if not self.snake_alive[snake_index]:
             return None
 
@@ -156,13 +148,13 @@ class GameManager:
         # Check wall and self collisions
         if snake.check_collision_wall():
             self.snake_alive[snake_index] = False
-            return 0
+            return 1
         elif snake.check_collision_self():
             self.snake_alive[snake_index] = False
             return 1
         elif snake.length <= 0:
             self.snake_alive[snake_index] = False
-            return 2
+            return 1
 
         # Check collisions with other snakes
         for other_index, other_snake in enumerate(self.snakes):
@@ -189,10 +181,9 @@ class GameManager:
                     self.snake_alive[snake_index] = False
                     return 1
 
-        return None  # No collision
+        return None 
 
     def step_multi_player(self, actions):
-        """Generalized step function for multiple players"""
         if self.game_over:
             return True, tuple(self.scores), tuple([None] * self.num_players)
 
