@@ -14,6 +14,7 @@ from agent.snake_agent import SnakeAgent
 from agent.state import State
 from agent.reward_system import RewardSystem
 import numpy as np
+import numpy as np
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
@@ -154,7 +155,7 @@ def train_agent(sessions=100,
     replay_manager = ReplayManager()
 
     # Scores
-    all_scores = [[] for _ in range(num_players)]
+    all_scores = []
     max_scores = [3] * num_players
 
     start_time = time.time()
@@ -269,12 +270,11 @@ def train_agent(sessions=100,
             replay_manager.end_episode(max_score)
 
         # Update max scores and collect scores for plotting
-        for i in range(num_players):
-            score = game_manager.score if num_players == 1 \
-                                    else game_manager.scores[i]
-            all_scores[i].append(score)
-            if score > max_scores[i]:
-                max_scores[i] = score
+        score = game_manager.score if num_players == 1 \
+                                else game_manager.scores[i]
+        all_scores.append(score)
+        if score > max_scores[i]:
+            max_scores[i] = score
 
         # Print progress information
         if num_players == 1:
@@ -308,13 +308,18 @@ def train_agent(sessions=100,
         agent.save_model(f"models/sess{episode + 1}-"
                  f"max{max_scores[0]}-"
                  f"sm{1 if use_smart_exploration else 0}.pth")
-        plot_training_results(all_scores[0], np.mean(all_scores[0]))
+        plot_training_results(all_scores)
 
+
+    end_time = time.time()
+    training_duration = end_time - start_time
+    print(f"Training duration: {training_duration:.2f} seconds")  
+    replay_manager.set_training_stats(all_scores, training_duration)
+    
     # Show the best replay at the end of training
     replay_manager.play_best(speed)
 
-
-def plot_training_results(scores, mean_scores, window_size=100):
+def plot_training_results(scores, window_size=100):
     plt.figure(figsize=(12, 8))
 
     # Plot scores in the main subplot

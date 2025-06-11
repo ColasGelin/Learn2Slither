@@ -2,6 +2,7 @@ import pygame
 from .constants import (COLOR_BLACK, COLOR_GREEN, COLOR_RED,
                         SCREEN_WIDTH, SCREEN_HEIGHT, CELL_SIZE,
                         PLAYER_COLORS)
+from .stats_overlay import StatsOverlay
 
 
 class ReplayManager:
@@ -12,8 +13,14 @@ class ReplayManager:
         self.current_replay = []
         self.best_combined_score = 0
         self.best_combined_replay = []
-
         self.apple_colors = {"green": COLOR_GREEN, "red": COLOR_RED}
+        
+        # Stats tracking
+        self.training_scores = []
+        self.training_duration = 0
+        self.stats_overlay = None
+        self.show_stats = False
+
 
     def record_state(self, game_manager):
         """Record current game state for any number of players"""
@@ -97,6 +104,12 @@ class ReplayManager:
                                  is_combined=is_multiplayer,
                                  score=self.best_score)
 
+    def set_training_stats(self, scores, training_duration=0):
+        """Set training statistics for display"""
+        self.training_scores = scores
+        self.training_duration = training_duration
+        self.stats_overlay = StatsOverlay(scores, training_duration, len(scores))
+    
     def _play_replay(self, replay, speed=24, is_combined=False, score=0):
         """Helper method to play a specific replay"""
         if not replay:
@@ -120,6 +133,10 @@ class ReplayManager:
                     if (event.type == pygame.KEYDOWN and
                             event.key == pygame.K_q):
                         running = False
+                        break
+                    if (event.type == pygame.KEYDOWN and
+                            event.key == pygame.K_h):
+                        self.show_stats = not self.show_stats
                         break
                 if not running:
                     break
@@ -150,6 +167,10 @@ class ReplayManager:
                                              pos[1] * CELL_SIZE, CELL_SIZE,
                                              CELL_SIZE)
                     pygame.draw.rect(screen, apple_color, apple_rect)
+
+                # Draw stats overlay if enabled
+                if self.show_stats and self.stats_overlay:
+                    self.stats_overlay.draw(screen)
 
                 pygame.display.flip()
                 clock.tick(speed)
