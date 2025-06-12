@@ -5,15 +5,13 @@ import argparse
 import matplotlib.pyplot as plt
 import time
 from src.game_manager import GameManager
-from src.constants import (COLOR_BLACK, COLOR_GREEN, COLOR_RED,
-                           CELL_SIZE, SCREEN_WIDTH,
-                           SCREEN_HEIGHT, SPEED, PLAYER_COLORS,
+from src.constants import (COLOR_BLACK, COLOR_GREEN, COLOR_RED, CELL_SIZE,
+                           SCREEN_WIDTH, SCREEN_HEIGHT, SPEED, PLAYER_COLORS,
                            BOARD_WIDTH, BOARD_HEIGHT)
 from src.replay_manager import ReplayManager
 from agent.snake_agent import SnakeAgent
 from agent.state import State
 from agent.reward_system import RewardSystem
-import numpy as np
 import numpy as np
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -22,10 +20,6 @@ sys.path.insert(0, project_root)
 
 
 def draw_board(screen, game_manager, episode=None, max_score=None):
-    """
-    Draw the game board for a multi-player game with n players
-    and update window title with score
-    """
     screen.fill(COLOR_BLACK)
 
     for i, snake in enumerate(game_manager.snakes):
@@ -53,9 +47,10 @@ def draw_board(screen, game_manager, episode=None, max_score=None):
 
     # Update window title with score(s)
     if hasattr(game_manager, "scores"):
-        score_str = " | ".join([f"Player {i+1}: {score}"
-                                for i, score in
-                                enumerate(game_manager.scores)])
+        score_str = " | ".join([
+            f"Player {i+1}: {score}"
+            for i, score in enumerate(game_manager.scores)
+        ])
         title = f"Snake Game - {score_str}"
         if episode is not None:
             title += f" | Episode: {episode}"
@@ -69,10 +64,7 @@ def draw_board(screen, game_manager, episode=None, max_score=None):
 def print_terminal_state(game_manager, snake_index=0):
     """Print the snake's vision state in terminal as required by subject"""
 
-    if hasattr(game_manager, 'snake'):
-        snake = game_manager.snake
-    else:
-        snake = game_manager.snakes[snake_index]
+    snake = game_manager.snakes[snake_index]
     head_x, head_y = snake.head
 
     vision_map = {}
@@ -138,8 +130,7 @@ def train_agent(sessions=100,
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         caption_mode = 'Player' if num_players == 1 else 'Players'
         pygame.display.set_caption(
-            f"Snake Game - {num_players} {caption_mode}"
-        )
+            f"Snake Game - {num_players} {caption_mode}")
         clock = pygame.time.Clock()
 
     # Initialize agents
@@ -155,7 +146,7 @@ def train_agent(sessions=100,
     replay_manager = ReplayManager()
 
     # Scores
-    all_scores = []
+    all_scores = [[] for _ in range(num_players)]
     max_scores = [3] * num_players
 
     start_time = time.time()
@@ -206,7 +197,7 @@ def train_agent(sessions=100,
 
             # Make the move
             if num_players == 1:
-                prev_scores = [game_manager.score]
+                prev_scores = [game_manager.scores[0]]
                 game_over, score = game_manager.step(actions[0])
                 game_manager.game_over = game_over
                 scores = [score]
@@ -226,8 +217,9 @@ def train_agent(sessions=100,
                     if num_players == 1:
                         just_died = game_over
                     else:
-                        just_died = deaths is not None and i < len(deaths) and deaths[i] is not None
-                        
+                        just_died = deaths is not None and i < len(
+                            deaths) and deaths[i] is not None
+
                     player_prev_score = prev_scores[i] if i < len(
                         prev_scores) else 0
                     player_new_score = scores[i] if i < len(scores) else 0
@@ -242,7 +234,7 @@ def train_agent(sessions=100,
 
                 next_state = state_processor.get_state(game_manager, i)
 
-                    # Train the agent when agent dies
+                # Train the agent when agent dies
                 if action_indices[i] is not None:
                     is_done = game_over if num_players == 1 else (
                         deaths is not None and i < len(deaths)
@@ -264,32 +256,25 @@ def train_agent(sessions=100,
 
         # Track the best episode for replay
         if num_players == 1:
-            game_manager.score = scores[0]
-            replay_manager.end_episode(game_manager.score)
+            game_manager.scores[0] = scores[0]
+            replay_manager.end_episode(game_manager.scores[0])
         else:
             max_score = max(game_manager.scores) if game_manager.scores else 0
             replay_manager.end_episode(max_score)
 
         # Update max scores and collect scores for plotting
-        score = game_manager.score if num_players == 1 \
-                                else game_manager.scores[i]
-        all_scores.append(score)
-        if score > max_scores[i]:
-            max_scores[i] = score
+        for i in range(num_players):
 
-        # Print progress information
-        if num_players == 1:
-            print(
-                f"{elapsed_time:.2f} - Episode {episode}/{sessions}"
-                f"- Score: {game_manager.score}, "
-                f"Max Score: {max_scores[0]}")
-        else:
-            print(f"{elapsed_time:.2f} - Episode {episode}/{sessions}")
-            for i in range(num_players):
-                print(
-                    f"Agent {i+1} - Score: {game_manager.scores[i]}, "
-                    f"Max Score: {max_scores[i]}"
-                )
+            score = game_manager.scores[0] if num_players == 1 \
+                                    else game_manager.scores[i]
+            all_scores[i].append(score)
+            if score > max_scores[i]:
+                max_scores[i] = score
+
+        print(f"{elapsed_time:.2f} - Episode {episode}/{sessions}")
+        for i in range(num_players):
+            print(f"Agent {i+1} - Score: {game_manager.scores[i]}, "
+                  f"Max Score: {max_scores[i]}")
 
         # Save agent models periodically
         if (episode + 1) % save_every == 0:
@@ -299,26 +284,24 @@ def train_agent(sessions=100,
                 else:
                     agent.save_model(
                         f"models/agent{i+1}_episode_{episode + 1}.pth")
-            print(
-                f"Model{'s' if num_players > 1 else ''} "
-                f"saved at episode {episode + 1}"
-            )
+            print(f"Model{'s' if num_players > 1 else ''} "
+                  f"saved at episode {episode + 1}")
 
     # Save final models
     if num_players == 1:
         agent.save_model(f"models/sess{episode + 1}-"
-                 f"max{max_scores[0]}-"
-                 f"sm{1 if use_smart_exploration else 0}.pth")
-        plot_training_results(all_scores)
-
+                         f"max{max_scores[0]}-"
+                         f"sm{1 if use_smart_exploration else 0}.pth")
+        plot_training_results(all_scores[0])
 
     end_time = time.time()
     training_duration = end_time - start_time
-    print(f"Training duration: {training_duration:.2f} seconds")  
-    replay_manager.set_training_stats(all_scores, training_duration)
-    
+    print(f"Training duration: {training_duration:.2f} seconds")
+    replay_manager.set_training_stats(all_scores[0], training_duration)
+
     # Show the best replay at the end of training
     replay_manager.play_best(speed)
+
 
 def plot_training_results(scores, window_size=100):
     plt.figure(figsize=(12, 8))
@@ -352,7 +335,7 @@ def plot_training_results(scores, window_size=100):
     plt.tight_layout()
     plt.savefig('training_results.png')
     print("Plot saved as 'training_results.png'")
-    
+
     plt.show()
 
 
@@ -360,9 +343,7 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     caption_mode = 'Player' if num_players == 1 else 'Players'
-    pygame.display.set_caption(
-        f"Snake Game - {num_players} {caption_mode}"
-    )
+    pygame.display.set_caption(f"Snake Game - {num_players} {caption_mode}")
     clock = pygame.time.Clock()
 
     # Initialize agents for all players
@@ -403,7 +384,7 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
                     action = agents[0].get_action(current_state)
                     game_over, score = game_manager.step(action)
                     game_manager.game_over = game_over
-                    game_manager.score = score
+                    game_manager.scores[0] = score
                 else:
                     actions = [None] * num_players
                     for i, agent in enumerate(agents):
@@ -425,8 +406,8 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
                 font = pygame.font.SysFont('Arial', 20, bold=True)
                 key_hint = "s" if num_players == 1 else "SPACE"
                 hint_text = font.render(
-                    f"Press '{key_hint}' for next step, 'q' to quit",
-                    True, (255, 255, 255))
+                    f"Press '{key_hint}' for next step, 'q' to quit", True,
+                    (255, 255, 255))
                 screen.blit(hint_text, (10, SCREEN_HEIGHT - 30))
                 pygame.display.flip()
 
@@ -491,6 +472,16 @@ def main():
     if args.num_players < 1 or args.num_players > 4:
         print("Error: Number of players must be between 1 and 4")
         sys.exit(1)
+
+    # Security check for model path
+    if args.model_path:
+        if not os.path.isfile(
+                args.model_path) or not args.model_path.endswith('.pth'):
+            print(
+                f"Error: Model file '{args.model_path}' "
+                f"does not exist or is not a .pth file."
+            )
+            sys.exit(1)
 
     if args.mode == 'train':
         # Single unified train function for both single and multiplayer

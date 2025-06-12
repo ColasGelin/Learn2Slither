@@ -1,7 +1,6 @@
 import pygame
-from .constants import (COLOR_BLACK, COLOR_GREEN, COLOR_RED,
-                        SCREEN_WIDTH, SCREEN_HEIGHT, CELL_SIZE,
-                        PLAYER_COLORS)
+from .constants import (COLOR_BLACK, COLOR_GREEN, COLOR_RED, SCREEN_WIDTH,
+                        SCREEN_HEIGHT, CELL_SIZE, PLAYER_COLORS)
 from .stats_overlay import StatsOverlay
 
 
@@ -14,16 +13,14 @@ class ReplayManager:
         self.best_combined_score = 0
         self.best_combined_replay = []
         self.apple_colors = {"green": COLOR_GREEN, "red": COLOR_RED}
-        
+
         # Stats tracking
         self.training_scores = []
         self.training_duration = 0
         self.stats_overlay = None
         self.show_stats = False
 
-
     def record_state(self, game_manager):
-        """Record current game state for any number of players"""
         state = {}
 
         multiplayer = hasattr(game_manager, 'snakes') and len(
@@ -48,23 +45,20 @@ class ReplayManager:
         else:
             state['multi_player'] = False
             state['players'] = [{
-                'body': list(game_manager.snake.body),
-                'score': game_manager.score
+                'body': list(game_manager.snakes[0].body),
+                'score': game_manager.scores[0]
             }]
-            state['snake_alive'] = [
-                True
-            ]
+            state['snake_alive'] = [True]
 
         state['apples'] = [(a.position, a.color) for a in game_manager.apples]
         self.current_replay.append(state)
 
     def end_episode(self, score):
-        """Check if this is the best replay"""
         is_best = False
 
         # If multiplayer get harmonic mean to find most interesting replay
-        if (self.current_replay and
-           self.current_replay[0].get('multi_player', False)):
+        if (self.current_replay
+                and self.current_replay[0].get('multi_player', False)):
             final_state = self.current_replay[-1]
             player_scores = [
                 player['score'] for player in final_state['players']
@@ -87,31 +81,29 @@ class ReplayManager:
         return is_best
 
     def start_episode_recording(self):
-        """Start a new episode recording"""
         self.current_replay = []
 
     def play_best(self, speed=24):
-        """Play the best recorded replay based on mode"""
         if not self.best_replay:
             print("No replay available")
             return
 
         # Determine if this is a multiplayer replay
-        is_multiplayer = (self.best_replay and
-                          self.best_replay[0].get('multi_player', False))
+        is_multiplayer = (self.best_replay
+                          and self.best_replay[0].get('multi_player', False))
 
-        return self._play_replay(self.best_replay, speed,
+        return self._play_replay(self.best_replay,
+                                 speed,
                                  is_combined=is_multiplayer,
                                  score=self.best_score)
 
     def set_training_stats(self, scores, training_duration=0):
-        """Set training statistics for display"""
         self.training_scores = scores
         self.training_duration = training_duration
-        self.stats_overlay = StatsOverlay(scores, training_duration, len(scores))
-    
+        self.stats_overlay = StatsOverlay(scores, training_duration,
+                                          len(scores))
+
     def _play_replay(self, replay, speed=24, is_combined=False, score=0):
-        """Helper method to play a specific replay"""
         if not replay:
             print("No replay available")
             return
@@ -130,12 +122,12 @@ class ReplayManager:
                     if event.type == pygame.QUIT:
                         running = False
                         break
-                    if (event.type == pygame.KEYDOWN and
-                            event.key == pygame.K_q):
+                    if (event.type == pygame.KEYDOWN
+                            and event.key == pygame.K_q):
                         running = False
                         break
-                    if (event.type == pygame.KEYDOWN and
-                            event.key == pygame.K_h):
+                    if (event.type == pygame.KEYDOWN
+                            and event.key == pygame.K_h):
                         self.show_stats = not self.show_stats
                         break
                 if not running:
@@ -157,7 +149,7 @@ class ReplayManager:
                                            pos[1] * CELL_SIZE, CELL_SIZE,
                                            CELL_SIZE)
                         pygame.draw.rect(screen, color_data["body"], rect)
-                        if pos == player['body'][0]:  # Head
+                        if pos == player['body'][0]:
                             pygame.draw.rect(screen, color_data["head"], rect)
 
                 # Draw apples

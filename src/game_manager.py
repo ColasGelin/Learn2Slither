@@ -1,5 +1,5 @@
-from src.constants import (BOARD_WIDTH, BOARD_HEIGHT,
-                           NUM_GREEN_APPLES, NUM_RED_APPLES)
+from src.constants import (BOARD_WIDTH, BOARD_HEIGHT, NUM_GREEN_APPLES,
+                           NUM_RED_APPLES)
 from src.snake import Snake
 from src.board import Board
 from src.apple import Apple
@@ -17,7 +17,8 @@ class GameManager:
         self.num_green_apples = num_green_apples
         self.num_red_apples = num_red_apples
         self.num_players = num_players
-        self.multiple_snake = num_players > 1  # For backward compatibility
+        self.is_multiplayer = num_players > 1
+        self.initial_score = 3
         self.reset_game()
 
     def reset_game(self):
@@ -40,19 +41,8 @@ class GameManager:
                 attempts += 1
 
             self.snakes.append(new_snake)
-            self.scores.append(3)  # Initial score
+            self.scores.append(self.initial_score)
             occupied_positions.extend(new_snake.body)
-
-        # For backward compatibility
-        if self.num_players > 0:
-            self.snake = self.snakes[0]
-            self.score = self.scores[0]
-
-        if self.num_players > 1:
-            self.snake_1 = self.snakes[0]
-            self.snake_2 = self.snakes[1]
-            self.score_1 = self.scores[0]
-            self.score_2 = self.scores[1]
 
         # Game state
         self.apples = []
@@ -85,30 +75,29 @@ class GameManager:
 
     def step(self, action):
         if self.game_over:
-            return True, self.score
+            return True, self.scores[0]
 
         if action:
-            self.snake.set_direction(action)
+            self.snakes[0].set_direction(action)
 
-        self.snake.move()
+        self.snakes[0].move()
         self.time_steps += 1
 
         # Check collisions
-        if self.snake.check_collision_wall():
+        if self.snakes[0].check_collision_wall():
             self.game_over = True
-        elif self.snake.check_collision_self():
+        elif self.snakes[0].check_collision_self():
             self.game_over = True
-        elif self.snake.length <= 0:
+        elif self.snakes[0].length <= 0:
             self.game_over = True
 
         # Process apple collisions
         if not self.game_over and self.handle_apple_collision(0):
             pass  # Apple collision was handled in the method
 
-        return self.game_over, self.score
+        return self.game_over, self.scores[0]
 
     def handle_apple_collision(self, snake_index):
-        """Process apple collision for a specific snake"""
         if not self.snake_alive[snake_index]:
             return False
 
@@ -124,13 +113,6 @@ class GameManager:
             elif apple.color == "green":
                 snake.grow()
                 self.scores[snake_index] += 1
-
-            # Update the main score variables for backward compatibility
-            if self.num_players > 0 and snake_index == 0:
-                self.score = self.scores[0]
-            if self.num_players > 1:
-                self.score_1 = self.scores[0]
-                self.score_2 = self.scores[1]
 
             # Remove and replace the apple
             self.apples.remove(apple)
@@ -181,7 +163,7 @@ class GameManager:
                     self.snake_alive[snake_index] = False
                     return 1
 
-        return None 
+        return None
 
     def step_multi_player(self, actions):
         if self.game_over:
@@ -199,23 +181,16 @@ class GameManager:
 
         self.time_steps += 1
 
-        # Check for collisions
-        death_reasons = [None] * self.num_players
+        # Check for collisions (apple and snake)
+        is_dead = [None] * self.num_players
         for i in range(self.num_players):
-            death_reasons[i] = self.check_snake_collisions(i)
-
-        # Process apple collisions for all snakes
+            is_dead[i] = self.check_snake_collisions(i)
         for i in range(self.num_players):
             self.handle_apple_collision(i)
 
         # Check if there is only one snake left alive or if all snakes are dead
         alive_count = sum(self.snake_alive)
-        if alive_count <= 1:  # Game ends when 0 or 1 snake remains
+        if alive_count <= 1:
             self.game_over = True
 
-        # For backward compatibility with dual snake mode
-        if self.num_players > 1:
-            return self.game_over, tuple(self.scores), tuple(death_reasons)
-
-        # For standard single-player mode
-        return self.game_over, self.scores[0], death_reasons[0]
+        return self.game_over, tuple(self.scores), tuple(is_dead)

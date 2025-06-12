@@ -14,11 +14,6 @@ class State:
         return 1.0 / distance
 
     def get_state(self, game_manager, snake_index=0):
-        """
-        Get the state representation for the specified snake
-        in a multi-snake environment
-        """
-        # Check if we're in multi-player mode
         multi_player = hasattr(game_manager, 'snakes') and len(
             game_manager.snakes) > 1
 
@@ -30,10 +25,8 @@ class State:
                     f"Only {len(game_manager.snakes)} snakes available."
                 )
 
-            # Get the current snake
+            # Get the current snake and opponent snakes
             current_snake = game_manager.snakes[snake_index]
-
-            # Get all other snakes as opponents
             opponent_snakes = [
                 snake for i, snake in enumerate(game_manager.snakes)
                 if i != snake_index and game_manager.snake_alive[i]
@@ -47,10 +40,8 @@ class State:
             return self.process_single_snake_state(game_manager)
 
     def process_single_snake_state(self, game_manager):
-        """Process state for single-snake environment"""
-        snake = game_manager.snake
+        snake = game_manager.snakes[0]
         state = np.zeros(AGENT_STATE_SIZE)
-        head_x, head_y = snake.head
 
         # Current direction one-hot encoding (4 values)
         state[0] = 1 if snake.direction == (-1, 0) else 0  # LEFT
@@ -75,7 +66,6 @@ class State:
 
     def process_multi_snake_state(self, game_manager, current_snake,
                                   opponent_snakes):
-        """Process state for multi-snake environment"""
         state = np.zeros(AGENT_STATE_SIZE)
         head_x, head_y = current_snake.head
 
@@ -107,25 +97,13 @@ class State:
 
     def _scan_direction(self, state, offset, head_pos, dx, dy, own_bodies,
                         opponent_bodies, apples):
-        """
-        Scan in a direction from the head position and update state accordingly
-        Args:
-            state: numpy array to update with the scan results
-            offset: index offset for state array
-            head_pos: (x,y) position of the snake's head
-            dx, dy: direction to scan
-            own_bodies: list of lists of positions for own snake body parts
-            opponent_bodies: list of lists of positions
-            for opponent snake bodies
-            apples: list of apple objects
-        """
         head_x, head_y = head_pos
         object_detected = "none"
         distance = 0
 
         # Start looking from the adjacent cell in the given direction
         x, y = head_x + dx, head_y + dy
-        distance = 1  # Start with distance 1 (adjacent cell)
+        distance = 1
 
         # Continue looking in this direction until we hit something
         while 0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT:
@@ -136,7 +114,6 @@ class State:
                     object_detected = "snake"
                     break
 
-            # If already found something, don't check further
             if object_detected != "none":
                 break
 
@@ -146,7 +123,6 @@ class State:
                     object_detected = "opponent_snake"
                     break
 
-            # If already found something, don't check further
             if object_detected != "none":
                 break
 
@@ -156,7 +132,6 @@ class State:
                     object_detected = f"{apple.color}_apple"
                     break
 
-            # If already found something, don't check further
             if object_detected != "none":
                 break
 

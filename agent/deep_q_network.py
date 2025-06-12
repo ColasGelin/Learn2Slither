@@ -17,7 +17,6 @@ class DQN(nn.Module):
         self.fc3 = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        """ Returns the Q-values for the given state. """
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -58,9 +57,6 @@ class DQNAgent:
         self.learn_step_counter = 0
 
     def get_action(self, state):
-        """ Returns the action to take based on the current state. """
-
-        # Exploration ?
         if np.random.rand() <= self.epsilon:
             return np.random.choice(self.action_size)
 
@@ -119,10 +115,13 @@ class DQNAgent:
         print(f"Model saved to {path}")
 
     def load(self, path):
-        if torch.cuda.is_available():
-            checkpoint = torch.load(path)
-        else:
-            checkpoint = torch.load(path, map_location=torch.device('cpu'))
+        try:
+            if torch.cuda.is_available():
+                checkpoint = torch.load(path)
+            else:
+                checkpoint = torch.load(path, map_location=torch.device('cpu'))
+        except Exception as e:
+            raise RuntimeError(f"Failed to load checkpoint from {path}: {e}")
 
         self.policy_net.load_state_dict(checkpoint['policy_net'])
         self.target_net.load_state_dict(checkpoint['target_net'])

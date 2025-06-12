@@ -1,5 +1,5 @@
-from src.constants import (INITIAL_SNAKE_LENGTH, RIGHT,
-                           BOARD_WIDTH, BOARD_HEIGHT)
+from src.constants import (INITIAL_SNAKE_LENGTH, RIGHT, BOARD_WIDTH,
+                           BOARD_HEIGHT)
 import random
 
 

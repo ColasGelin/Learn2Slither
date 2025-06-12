@@ -18,12 +18,12 @@ class RewardSystem:
         self.prev_distance_to_apple = {}  # Dictionary to track per player
 
     def calculate_reward(self,
-                     game_manager,
-                     just_died,
-                     prev_score,
-                     new_score,
-                     num_players=1,
-                     player_index=0):
+                         game_manager,
+                         just_died,
+                         prev_score,
+                         new_score,
+                         num_players=1,
+                         player_index=0):
         reward = 0
 
         # Death penalty
@@ -40,26 +40,24 @@ class RewardSystem:
             reward += self.bad_apple_penalty
             return reward
 
-        if num_players == 1:
-            head_pos = game_manager.snake.head
-        else:
-            if player_index >= len(
-                    game_manager.snakes
-            ) or not game_manager.snake_alive[player_index]:
-                return 0
-            head_pos = game_manager.snakes[player_index].head
+        if player_index >= len(
+                game_manager.snakes
+        ) or not game_manager.snake_alive[player_index]:
+            return 0
+        head_pos = game_manager.snakes[player_index].head
 
         min_distance_to_apple = float('inf')
-        
+
         # Check for green apples in horizontal or vertical line from head
         for apple in game_manager.apples:
             if apple.color == "green":
                 apple_pos = apple.position
-                
-                # Check if apple is visible in horizontal or vertical line from head
+
+                # Check if apple is visible in horizontal or vertical line
                 if apple_pos[0] == head_pos[0] or apple_pos[1] == head_pos[1]:
                     distance = self._calculate_distance(head_pos, apple_pos)
-                    min_distance_to_apple = min(min_distance_to_apple, distance)
+                    min_distance_to_apple = min(min_distance_to_apple,
+                                                distance)
 
         # Gives reward for approaching the apple
         if (player_index in self.prev_distance_to_apple
@@ -97,9 +95,9 @@ class RewardSystem:
         return reward
 
     def _calculate_distance(self, pos1, pos2):
-        if pos1[0] == pos2[0]:  
+        if pos1[0] == pos2[0]:
             return abs(pos1[1] - pos2[1])
-        elif pos1[1] == pos2[1]:  
+        elif pos1[1] == pos2[1]:
             return abs(pos1[0] - pos2[0])
 
     def reset(self):
