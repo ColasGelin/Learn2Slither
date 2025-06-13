@@ -150,6 +150,7 @@ def train_agent(sessions=100,
     max_scores = [3] * num_players
 
     start_time = time.time()
+    epsilon = 1
 
     # EPISODE LOOP
     for episode in range(sessions):
@@ -239,8 +240,10 @@ def train_agent(sessions=100,
                     is_done = game_over if num_players == 1 else (
                         deaths is not None and i < len(deaths)
                         and deaths[i] is not None)
-                    agents[i].train(current_states[i], action_indices[i],
+                    _, new_epsilon = agents[i].train(current_states[i], action_indices[i],
                                     reward, next_state, is_done)
+                    if new_epsilon is not None:
+                        epsilon = new_epsilon
 
                 current_states[i] = next_state
 
@@ -274,7 +277,7 @@ def train_agent(sessions=100,
         print(f"{elapsed_time:.2f} - Episode {episode}/{sessions}")
         for i in range(num_players):
             print(f"Agent {i+1} - Score: {game_manager.scores[i]}, "
-                  f"Max Score: {max_scores[i]}")
+                  f"Max Score: {max_scores[i]}, epsilon: {epsilon:.2f}")
 
         # Save agent models periodically
         if (episode + 1) % save_every == 0:
@@ -339,7 +342,7 @@ def plot_training_results(scores, window_size=100):
     plt.show()
 
 
-def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
+def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False, games=100):
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     caption_mode = 'Player' if num_players == 1 else 'Players'
@@ -351,19 +354,19 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
     for i in range(num_players):
         agent = SnakeAgent()
         if model_path:
-            print(f"Loading model for player {i + 1} from {model_path[i]}")
+            print(f"Loading model for player {i + 1} from {model_path}")
             agent.load_model(model_path)
         agent.epsilon = 0  # No exploration
         agents.append(agent)
 
     state_processor = State()
+    max_score = 0
 
-    while True:
+    for i in range(games):
         game_manager = GameManager(num_players=num_players)
         game_manager.reset_game()
 
         advance_step = not step_by_step
-
         while not game_manager.game_over:
             # Process events
             for event in pygame.event.get():
@@ -395,12 +398,15 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
                     game_over, _, _ = game_manager.step_multi_player(actions)
                     game_manager.game_over = game_over
 
+                if (speed < 100):
+                    print(f"Action : {[direction_to_string(action)]}")
+                    draw_board(screen, game_manager)
+                    print_terminal_state(game_manager)
+                
                 # Reset the flag for step-by-step mode
                 if step_by_step:
                     advance_step = False
 
-            draw_board(screen, game_manager)
-            print_terminal_state(game_manager)
 
             if step_by_step:
                 font = pygame.font.SysFont('Arial', 20, bold=True)
@@ -412,7 +418,23 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False):
                 pygame.display.flip()
 
             clock.tick(speed)
+            
+        if (game_manager.scores[0] > max_score):
+            max_score = game_manager.scores[0]
+        print(f"Game {i}/{games}| Score: {game_manager.scores[0]}, Max Score: {max_score}")
 
+def direction_to_string(action):
+        dx, dy = action
+        if dx == -1 and dy == 0:
+            return "LEFT"
+        elif dx == 1 and dy == 0:
+            return "RIGHT"
+        elif dx == 0 and dy == -1:
+            return "UP"
+        elif dx == 0 and dy == 1:
+            return "DOWN"
+        else:
+            return f"({dx}, {dy})"
 
 def main():
     parser = argparse.ArgumentParser(
@@ -499,7 +521,8 @@ def main():
         play_game(model_path=args.model_path,
                   num_players=args.num_players,
                   speed=args.display_speed,
-                  step_by_step=args.step_by_step)
+                  step_by_step=args.step_by_step,
+                  games=args.sessions)
 
     pygame.quit()
     print("Game exited successfully.")

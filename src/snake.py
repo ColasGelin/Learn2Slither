@@ -26,7 +26,7 @@ class Snake:
         new_head_y = head_y + self.direction[1]
 
         self.body.insert(0, (new_head_x, new_head_y))
-        self.head = self.body[0]  # Update the head property
+        self.head = self.body[0]
 
         if len(self.body) > self.length:
             self.body.pop()
@@ -39,9 +39,6 @@ class Snake:
             self.length -= amount
 
     def set_direction(self, new_direction):
-        if self.direction[0] + new_direction[0] == 0 and \
-           self.direction[1] + new_direction[1] == 0:
-            return
         self.direction = new_direction
 
     def check_collision_wall(self):

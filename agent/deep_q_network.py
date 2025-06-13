@@ -10,7 +10,7 @@ class DQN(nn.Module):
     def __init__(self,
                  input_size=AGENT_STATE_SIZE,
                  output_size=AGENT_ACTION_SIZE,
-                 hidden_size=64):
+                 hidden_size=128):
         super(DQN, self).__init__()
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
@@ -29,10 +29,10 @@ class DQNAgent:
                  state_size=AGENT_STATE_SIZE,
                  action_size=AGENT_ACTION_SIZE,
                  learning_rate=0.001,
-                 gamma=0.99,
+                 gamma=0.95,
                  epsilon_start=0.9,
-                 epsilon_min=0.2,
-                 epsilon_decay=0.995):
+                 epsilon_min=0.05,
+                 epsilon_decay=0.9995):
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu")
 
@@ -102,7 +102,7 @@ class DQNAgent:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
-        return loss.item()
+        return loss.item(), self.epsilon
 
     def save(self, path):
         torch.save(

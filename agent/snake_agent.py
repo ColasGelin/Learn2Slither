@@ -70,9 +70,9 @@ class SnakeAgent:
         if (len(self.replay_buffer) > self.batch_size
                 and self.step_counter % self.update_target_frequency == 0):
             experiences = self.replay_buffer.sample(self.batch_size)
-            loss = self.agent.learn(experiences)
-            return loss
-        return None
+            loss, epsilon = self.agent.learn(experiences)
+            return loss, epsilon
+        return None, None
 
     def action_to_idx(self, action):
         return self.actions.index(action)
