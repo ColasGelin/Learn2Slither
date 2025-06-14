@@ -148,6 +148,7 @@ def train_agent(sessions=100,
     # Scores
     all_scores = [[] for _ in range(num_players)]
     max_scores = [3] * num_players
+    epsilon_history = []
 
     start_time = time.time()
     epsilon = 1
@@ -183,7 +184,7 @@ def train_agent(sessions=100,
             actions = []
             action_indices = []
 
-            # get actions from agents
+            # 1 get actions from agents
             for i, agent in enumerate(agents):
                 if i < num_players and (num_players == 1
                                         or game_manager.snake_alive[i]):
@@ -196,7 +197,7 @@ def train_agent(sessions=100,
                     actions.append(None)
                     action_indices.append(None)
 
-            # Make the move
+            # 2 Make the move
             if num_players == 1:
                 prev_scores = [game_manager.scores[0]]
                 game_over, score = game_manager.step(actions[0])
@@ -210,7 +211,7 @@ def train_agent(sessions=100,
 
             replay_manager.record_state(game_manager)
 
-            # Calculate rewards (snakes alive or that just died)
+            # 3 Calculate rewards (snakes alive or that just died)
             for i in range(num_players):
                 if num_players == 1 or game_manager.snake_alive[i] or (
                         deaths is not None and i < len(deaths)
@@ -235,16 +236,18 @@ def train_agent(sessions=100,
 
                 next_state = state_processor.get_state(game_manager, i)
 
-                # Train the agent when agent dies
+                # 4 Train the agent when agent dies
                 if action_indices[i] is not None:
                     is_done = game_over if num_players == 1 else (
                         deaths is not None and i < len(deaths)
                         and deaths[i] is not None)
-                    _, new_epsilon = agents[i].train(current_states[i], action_indices[i],
-                                    reward, next_state, is_done)
+                    _, new_epsilon = agents[i].train(current_states[i],
+                                                     action_indices[i], reward,
+                                                     next_state, is_done)
                     if new_epsilon is not None:
                         epsilon = new_epsilon
 
+                # 5 get next state
                 current_states[i] = next_state
 
             if render_this_episode:
@@ -274,6 +277,8 @@ def train_agent(sessions=100,
             if score > max_scores[i]:
                 max_scores[i] = score
 
+        epsilon_history.append(epsilon)
+
         print(f"{elapsed_time:.2f} - Episode {episode}/{sessions}")
         for i in range(num_players):
             print(f"Agent {i+1} - Score: {game_manager.scores[i]}, "
@@ -295,7 +300,7 @@ def train_agent(sessions=100,
         agent.save_model(f"models/sess{episode + 1}-"
                          f"max{max_scores[0]}-"
                          f"sm{1 if use_smart_exploration else 0}.pth")
-        plot_training_results(all_scores[0])
+        plot_training_results(all_scores[0], epsilon_history=epsilon_history)
 
     end_time = time.time()
     training_duration = end_time - start_time
@@ -306,10 +311,8 @@ def train_agent(sessions=100,
     replay_manager.play_best(speed)
 
 
-def plot_training_results(scores, window_size=100):
-    plt.figure(figsize=(12, 8))
-
-    # Plot scores in the main subplot
+def plot_training_results(scores, epsilon_history=None, window_size=100):
+    plt.figure(figsize=(12, 10))
     plt.subplot(2, 1, 1)
     plt.plot(scores, label='Score per Episode', alpha=0.3, color='blue')
 
@@ -331,23 +334,50 @@ def plot_training_results(scores, window_size=100):
 
     plt.xlabel('Episodes')
     plt.ylabel('Score')
-    plt.title('Snake Training Progress')
+    plt.title('Snake Training Progress - Scores')
     plt.legend()
     plt.grid(True, alpha=0.3)
 
-    plt.tight_layout()
-    plt.savefig('training_results.png')
-    print("Plot saved as 'training_results.png'")
+    if epsilon_history:
+        plt.subplot(2, 1, 2)
+        plt.plot(epsilon_history,
+                 label='Epsilon (Exploration Rate)',
+                 color='green',
+                 linewidth=1.5)
 
+        final_epsilon = epsilon_history[-1]
+        plt.axhline(y=final_epsilon,
+                    color='orange',
+                    linestyle='--',
+                    label=f'Final Epsilon: {final_epsilon:.3f}')
+
+        plt.xlabel('Episodes')
+        plt.ylabel('Epsilon')
+        plt.title('Epsilon Decay Over Training')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.ylim(0, 1)  # Set y-axis limits for better visualization
+
+    plt.tight_layout()
+    plt.savefig('training_results.png', dpi=150)
+    print("Plot saved as 'training_results.png'")
     plt.show()
 
 
-def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False, games=100):
-    pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    caption_mode = 'Player' if num_players == 1 else 'Players'
-    pygame.display.set_caption(f"Snake Game - {num_players} {caption_mode}")
-    clock = pygame.time.Clock()
+def play_game(model_path=None,
+              num_players=1,
+              speed=SPEED,
+              step_by_step=False,
+              games=100):
+    if (speed < 1):
+        speed = 1
+    if (speed < 100):
+        pygame.init()
+        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        caption_mode = 'Player' if num_players == 1 else 'Players'
+        pygame.display.set_caption(
+            f"Snake Game - {num_players} {caption_mode}")
+        clock = pygame.time.Clock()
 
     # Initialize agents for all players
     agents = []
@@ -369,17 +399,18 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False, g
         advance_step = not step_by_step
         while not game_manager.game_over:
             # Process events
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                elif step_by_step and event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_s or event.key == pygame.K_SPACE:
-                        advance_step = True
-                    elif event.key == pygame.K_q:
-                        print("Quitting game...")
+            if (speed < 100):
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
                         pygame.quit()
                         sys.exit()
+                    elif step_by_step and event.type == pygame.KEYDOWN:
+                        if event.key in (pygame.K_s, pygame.K_SPACE):
+                            advance_step = True
+                        elif event.key == pygame.K_q:
+                            print("Quitting game...")
+                            pygame.quit()
+                            sys.exit()
 
             if advance_step:
                 if num_players == 1:
@@ -402,13 +433,12 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False, g
                     print(f"Action : {[direction_to_string(action)]}")
                     draw_board(screen, game_manager)
                     print_terminal_state(game_manager)
-                
+
                 # Reset the flag for step-by-step mode
                 if step_by_step:
                     advance_step = False
 
-
-            if step_by_step:
+            if step_by_step and speed < 100:
                 font = pygame.font.SysFont('Arial', 20, bold=True)
                 key_hint = "s" if num_players == 1 else "SPACE"
                 hint_text = font.render(
@@ -417,24 +447,30 @@ def play_game(model_path=None, num_players=1, speed=SPEED, step_by_step=False, g
                 screen.blit(hint_text, (10, SCREEN_HEIGHT - 30))
                 pygame.display.flip()
 
-            clock.tick(speed)
-            
+            if (speed < 100):
+                clock.tick(speed)
+
         if (game_manager.scores[0] > max_score):
             max_score = game_manager.scores[0]
-        print(f"Game {i}/{games}| Score: {game_manager.scores[0]}, Max Score: {max_score}")
+        print(
+            f"Game {i}/{games}| Score: {game_manager.scores[0]}, "
+            f"Max Score: {max_score}"
+        )
+
 
 def direction_to_string(action):
-        dx, dy = action
-        if dx == -1 and dy == 0:
-            return "LEFT"
-        elif dx == 1 and dy == 0:
-            return "RIGHT"
-        elif dx == 0 and dy == -1:
-            return "UP"
-        elif dx == 0 and dy == 1:
-            return "DOWN"
-        else:
-            return f"({dx}, {dy})"
+    dx, dy = action
+    if dx == -1 and dy == 0:
+        return "LEFT"
+    elif dx == 1 and dy == 0:
+        return "RIGHT"
+    elif dx == 0 and dy == -1:
+        return "UP"
+    elif dx == 0 and dy == 1:
+        return "DOWN"
+    else:
+        return f"({dx}, {dy})"
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -490,23 +526,18 @@ def main():
                         help='Enable smart exploration during training')
     args = parser.parse_args()
 
-    # Validate number of players
     if args.num_players < 1 or args.num_players > 4:
         print("Error: Number of players must be between 1 and 4")
         sys.exit(1)
 
-    # Security check for model path
     if args.model_path:
         if not os.path.isfile(
                 args.model_path) or not args.model_path.endswith('.pth'):
-            print(
-                f"Error: Model file '{args.model_path}' "
-                f"does not exist or is not a .pth file."
-            )
+            print(f"Error: Model file '{args.model_path}' "
+                  f"does not exist or is not a .pth file.")
             sys.exit(1)
 
     if args.mode == 'train':
-        # Single unified train function for both single and multiplayer
         train_agent(
             sessions=args.sessions,
             render=args.render,
@@ -517,7 +548,6 @@ def main():
             num_players=args.num_players,
             use_smart_exploration=args.smart_exploration)
     elif args.mode == 'play':
-        # Unified play function for any number of players
         play_game(model_path=args.model_path,
                   num_players=args.num_players,
                   speed=args.display_speed,

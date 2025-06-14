@@ -33,7 +33,8 @@ class RewardSystem:
         # Apple reward
         if new_score > prev_score:
             score_multiplier = 1 + (new_score * 0.1)
-            reward += self.apple_reward * (new_score - prev_score) * score_multiplier
+            apple_gain = new_score - prev_score
+            reward += self.apple_reward * (apple_gain) * score_multiplier
             if player_index in self.prev_distance_to_apple:
                 self.prev_distance_to_apple[player_index] = None
             return reward
@@ -41,11 +42,12 @@ class RewardSystem:
             reward += self.bad_apple_penalty
             return reward
 
+        # ignore dead snakes
         if player_index >= len(
                 game_manager.snakes
         ) or not game_manager.snake_alive[player_index]:
             return 0
-        
+
         head_pos = game_manager.snakes[player_index].head
         min_distance_to_apple = float('inf')
 
@@ -54,25 +56,25 @@ class RewardSystem:
             if apple.color == "green":
                 apple_pos = apple.position
 
-                # Check if apple is visible in horizontal or vertical line
                 if apple_pos[0] == head_pos[0] or apple_pos[1] == head_pos[1]:
                     distance = self._calculate_distance(head_pos, apple_pos)
                     min_distance_to_apple = min(min_distance_to_apple,
                                                 distance)
 
-        # Gives reward for approaching the apple
+        # apple approach reward
         if (player_index in self.prev_distance_to_apple
                 and self.prev_distance_to_apple[player_index] is not None
                 and min_distance_to_apple < float('inf')):
             prev_distance = self.prev_distance_to_apple[player_index]
             distance_change = prev_distance - min_distance_to_apple
-            
-            # Better scaling for approach reward
-            if distance_change > 0: 
-                approach_reward = distance_change * self.approach_reward_factor * (2.0 / (min_distance_to_apple + 1))
+
+            # scaling approach reward
+            if distance_change > 0:
+                approach_reward = distance_change * self.approach_reward_factor
+                approach_reward *= (2.0 / (min_distance_to_apple + 1))
                 reward += approach_reward
-            elif distance_change < 0: 
-                penalty = abs(distance_change) * 0.2 
+            elif distance_change < 0:
+                penalty = abs(distance_change) * 0.2
                 reward -= penalty
 
         if min_distance_to_apple < float('inf'):
@@ -80,17 +82,6 @@ class RewardSystem:
 
         # Base move reward
         reward += self.base_move_reward
-        
-        current_length = len(game_manager.snakes[player_index].body)
-        survival_bonus = 0.05 + (current_length * 0.01)
-        reward += survival_bonus
-        
-        # Length-based rewards
-        current_length = len(game_manager.snakes[player_index].body)
-        if current_length >= 20: 
-            reward += 0.5
-        if current_length >= 30:
-            reward += 1.0
 
         # Multiplayer length advantage
         if num_players > 1:

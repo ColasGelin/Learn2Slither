@@ -5,12 +5,10 @@ from src.constants import BOARD_WIDTH, BOARD_HEIGHT, AGENT_STATE_SIZE
 class State:
 
     def __init__(self):
-        # We'll still use this for normalization,
-        # but only based on what the snake sees
         self.max_possible_distance = max(BOARD_WIDTH, BOARD_HEIGHT)
 
     def _normalize_distance(self, distance):
-        # Inverse distance scaling: closer objects have higher values
+        # Inverse distance scaling (closer objects have higher values)
         return 1.0 / distance
 
     def get_state(self, game_manager, snake_index=0):
@@ -18,7 +16,6 @@ class State:
             game_manager.snakes) > 1
 
         if multi_player:
-            # Make sure snake_index is valid
             if snake_index >= len(game_manager.snakes):
                 raise ValueError(
                     f"Invalid snake index {snake_index}. "
@@ -43,7 +40,6 @@ class State:
         snake = game_manager.snakes[0]
         state = np.zeros(AGENT_STATE_SIZE)
 
-        # Current direction one-hot encoding (4 values)
         state[0] = 1 if snake.direction == (-1, 0) else 0  # LEFT
         state[1] = 1 if snake.direction == (1, 0) else 0  # RIGHT
         state[2] = 1 if snake.direction == (0, -1) else 0  # UP
@@ -67,7 +63,6 @@ class State:
     def process_multi_snake_state(self, game_manager, current_snake,
                                   opponent_snakes):
         state = np.zeros(AGENT_STATE_SIZE)
-        head_x, head_y = current_snake.head
 
         # Current direction one-hot encoding (4 values)
         state[0] = 1 if current_snake.direction == (-1, 0) else 0  # LEFT
@@ -85,7 +80,7 @@ class State:
         ]
 
         # Get obstacles: own body (except head) and opponent snakes' bodies
-        own_body = [current_snake.body[1:]]  # Skip head
+        own_body = [current_snake.body[1:]]
         opponent_bodies = [snake.body for snake in opponent_snakes]
 
         for dx, dy, offset in directions:
@@ -107,7 +102,6 @@ class State:
 
         # Continue looking in this direction until we hit something
         while 0 <= x < BOARD_WIDTH and 0 <= y < BOARD_HEIGHT:
-            # Check for own snake body
             position = (x, y)
             for body in own_bodies:
                 if position in body:
@@ -140,7 +134,7 @@ class State:
             y += dy
             distance += 1
 
-        # If we exited the loop without finding
+        # If exited the loop without finding
         # anything inside the board, it's a wall
         if object_detected == "none" and not (0 <= x < BOARD_WIDTH
                                               and 0 <= y < BOARD_HEIGHT):
