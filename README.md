@@ -32,7 +32,7 @@ python main.py [OPTIONS]
 
 **Train an agent:**
 ```bash
-python main.py -m train -s 1000 -r 100
+python main.py -m train -s 3000 -r 500 -sm
 ```
 
 **Play with trained model:**
