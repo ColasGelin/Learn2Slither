@@ -18,6 +18,127 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 sys.path.insert(0, project_root)
 
+# Grid configuration for multi-display
+GRID_SIZE = 3  # 3x3 grid
+GAMES_TOTAL = 9
+MINI_BOARD_WIDTH = SCREEN_WIDTH // GRID_SIZE
+MINI_BOARD_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
+
+class ProgressiveReplayManager:
+    def __init__(self):
+        self.replay_snapshots = []
+        self.target_scores = [3, 5, 8, 12, 16, 20, 25, 30, 35]  # Progressive targets
+        self.captured_replays = []
+        
+        # New: Interval-based replay capture
+        self.interval_replays = []
+        self.capture_intervals = []  # Will store the episode numbers where we capture
+        
+    def setup_interval_capture(self, total_sessions):
+        """Setup capture intervals - every 1/9th of total sessions"""
+        self.capture_intervals = []
+        for i in range(1, 10):  # 1-9, so we get 9 intervals
+            episode_num = int((total_sessions * i) / 9)
+            self.capture_intervals.append(episode_num)
+        print(f"Will capture replays at episodes: {self.capture_intervals}")
+    
+    def check_interval_capture(self, episode, replay_manager):
+        """Check if we should capture replay at this episode interval"""
+        if episode in self.capture_intervals:
+            interval_index = self.capture_intervals.index(episode)
+            
+            if replay_manager.current_replay and len(replay_manager.current_replay) > 0:
+                # Get the current score from the last state
+                last_state = replay_manager.current_replay[-1]
+                if 'players' in last_state and last_state['players']:
+                    score = last_state['players'][0]['score']
+                else:
+                    score = 0
+                
+                replay_data = {
+                    'episode': episode,
+                    'score': score,
+                    'states': replay_manager.current_replay.copy(),
+                    'interval_index': interval_index
+                }
+                self.interval_replays.append(replay_data)
+                print(f"✓ Captured interval replay {interval_index + 1}/9 at episode {episode} with score {score} - {len(replay_data['states'])} states")
+                return True
+        return False
+        
+    def get_interval_replays(self):
+        """Get all interval replays, filling gaps if needed"""
+        replays = []
+        
+        for i in range(GAMES_TOTAL):
+            if i < len(self.interval_replays):
+                replays.append(self.interval_replays[i])
+            elif self.interval_replays:
+                # Use the best available replay for remaining slots
+                best_replay = max(self.interval_replays, key=lambda x: x['score']).copy()
+                best_replay['interval_index'] = i
+                best_replay['episode'] = self.capture_intervals[i] if i < len(self.capture_intervals) else best_replay['episode']
+                replays.append(best_replay)
+            else:
+                # Fallback empty replay
+                episode_num = self.capture_intervals[i] if i < len(self.capture_intervals) else i * 100
+                replays.append({
+                    'episode': episode_num,
+                    'score': 0,
+                    'states': [],
+                    'interval_index': i
+                })
+        
+        return replays
+
+    def check_and_store_replay(self, score, replay_manager):
+        """Store replay if it meets the next target score"""
+        next_target_index = len(self.captured_replays)
+        
+        if (next_target_index < len(self.target_scores) and 
+            score >= self.target_scores[next_target_index]):
+            
+            # Make sure we have replay data
+            if replay_manager.current_replay and len(replay_manager.current_replay) > 0:
+                # Store the replay data - use current_replay instead of current_episode_states
+                replay_data = {
+                    'score': score,
+                    'target_score': self.target_scores[next_target_index],
+                    'states': replay_manager.current_replay.copy(),  # Fixed: use current_replay
+                    'episode_index': next_target_index
+                }
+                self.captured_replays.append(replay_data)
+                print(f"✓ Captured replay {next_target_index + 1}/9 with score {score} (target: {self.target_scores[next_target_index]}) - {len(replay_data['states'])} states")
+                
+                return True
+            else:
+                print(f"Warning: No replay data available for score {score}")
+        return False
+    
+    def get_all_replays(self):
+        """Get all captured replays, filling gaps with the best available"""
+        replays = []
+        
+        for i in range(GAMES_TOTAL):
+            if i < len(self.captured_replays):
+                replays.append(self.captured_replays[i])
+            elif self.captured_replays:
+                # Use the best replay available for remaining slots
+                best_replay = self.captured_replays[-1].copy()
+                best_replay['episode_index'] = i
+                best_replay['target_score'] = self.target_scores[i] if i < len(self.target_scores) else best_replay['target_score']
+                replays.append(best_replay)
+            else:
+                # Fallback empty replay
+                replays.append({
+                    'score': 0,
+                    'target_score': self.target_scores[i] if i < len(self.target_scores) else 0,
+                    'states': [],
+                    'episode_index': i
+                })
+        
+        return replays
+
 
 def draw_board(screen, game_manager, episode=None, max_score=None):
     screen.fill(COLOR_BLACK)
@@ -124,7 +245,8 @@ def train_agent(sessions=100,
                 model_path=None,
                 speed=SPEED,
                 num_players=1,
-                use_smart_exploration=False):
+                use_smart_exploration=False,
+                use_interval_replays=False):
     if render:
         pygame.init()
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -144,6 +266,10 @@ def train_agent(sessions=100,
     state_processor = State()
     reward_system = RewardSystem()
     replay_manager = ReplayManager()
+
+    # Initialize progressive replay manager
+    progressive_manager = ProgressiveReplayManager()
+    progressive_manager.setup_interval_capture(sessions)
 
     # Scores
     all_scores = [[] for _ in range(num_players)]
@@ -262,6 +388,12 @@ def train_agent(sessions=100,
 
         # Track the best episode for replay
         if num_players == 1:
+            # Check if this episode should be stored for progressive replay BEFORE ending episode
+            progressive_manager.check_and_store_replay(scores[0], replay_manager)
+            
+            # Check for interval capture
+            progressive_manager.check_interval_capture(episode, replay_manager)
+            
             game_manager.scores[0] = scores[0]
             replay_manager.end_episode(game_manager.scores[0])
         else:
@@ -307,8 +439,22 @@ def train_agent(sessions=100,
     print(f"Training duration: {training_duration:.2f} seconds")
     replay_manager.set_training_stats(all_scores[0], training_duration)
 
-    # Show the best replay at the end of training
-    replay_manager.play_best(speed)
+    # Show replays based on user choice
+    if use_interval_replays and len(progressive_manager.interval_replays) > 0:
+        print(f"\nCaptured {len(progressive_manager.interval_replays)} interval replays!")
+        for i, replay in enumerate(progressive_manager.interval_replays):
+            print(f"  Interval {i+1}: Episode {replay['episode']}, Score {replay['score']}, States: {len(replay['states'])}")
+        print("Starting interval replay showcase...")
+        show_interval_replays(progressive_manager, speed=10)
+    elif len(progressive_manager.captured_replays) > 0:
+        print(f"\nCaptured {len(progressive_manager.captured_replays)} progressive replays!")
+        for i, replay in enumerate(progressive_manager.captured_replays):
+            print(f"  Replay {i+1}: Score {replay['score']}, Target {replay['target_score']}, States: {len(replay['states'])}")
+        print("Starting progressive replay showcase...")
+        show_progressive_replays(progressive_manager, speed=10)
+    else:
+        print("No replays captured, showing best replay...")
+        replay_manager.play_best(speed)
 
 
 def plot_training_results(scores, epsilon_history=None, window_size=100):
@@ -369,6 +515,9 @@ def play_game(model_path=None,
               speed=SPEED,
               step_by_step=False,
               games=100):
+    if (model_path is None):
+        print("Error: Model file does not exist or is not specified.")
+        sys.exit(1)
     if (speed < 1):
         speed = 1
     if (speed < 100):
@@ -430,7 +579,8 @@ def play_game(model_path=None,
                     game_manager.game_over = game_over
 
                 if (speed < 100):
-                    print(f"Action : {[direction_to_string(action)]}")
+                    if (num_players == 1):
+                        print(f"Action : {[direction_to_string(action)]}")
                     draw_board(screen, game_manager)
                     print_terminal_state(game_manager)
 
@@ -470,6 +620,414 @@ def direction_to_string(action):
         return "DOWN"
     else:
         return f"({dx}, {dy})"
+
+
+def draw_interval_mini_game(screen, game_state, grid_x, grid_y, replay_info, step_index):
+    """Draw a single mini game in the grid for interval replays"""
+    offset_x = grid_x * MINI_BOARD_WIDTH
+    offset_y = grid_y * MINI_BOARD_HEIGHT
+    
+    # Create surface for this mini game
+    mini_surface = pygame.Surface((MINI_BOARD_WIDTH, MINI_BOARD_HEIGHT))
+    mini_surface.fill(COLOR_BLACK)
+    
+    # Draw border
+    border_color = (0, 255, 0) if step_index < len(replay_info['states']) else (255, 0, 0)
+    pygame.draw.rect(mini_surface, border_color, 
+                    (0, 0, MINI_BOARD_WIDTH, MINI_BOARD_HEIGHT), 2)
+    
+    # Scale factor for mini display
+    scale_x = (MINI_BOARD_WIDTH - 20) / (BOARD_WIDTH * CELL_SIZE)
+    scale_y = (MINI_BOARD_HEIGHT - 60) / (BOARD_HEIGHT * CELL_SIZE)
+    scale = min(scale_x, scale_y)
+    
+    start_x = 10
+    start_y = 40
+    
+    # Work with ReplayManager's state format
+    if game_state and 'players' in game_state:
+        # Draw snake(s)
+        for i, player in enumerate(game_state['players']):
+            if i >= len(PLAYER_COLORS):
+                continue
+                
+            # Check if snake is alive
+            snake_alive = True
+            if 'snake_alive' in game_state and i < len(game_state['snake_alive']):
+                snake_alive = game_state['snake_alive'][i]
+            
+            if not snake_alive:
+                continue
+                
+            color_data = PLAYER_COLORS[i]
+            
+            # Draw snake body
+            for j, (x, y) in enumerate(player['body']):
+                rect_x = start_x + int(x * CELL_SIZE * scale)
+                rect_y = start_y + int(y * CELL_SIZE * scale)
+                rect_size = max(2, int(CELL_SIZE * scale))
+                
+                rect = pygame.Rect(rect_x, rect_y, rect_size, rect_size)
+                
+                if j == 0:  # Head is first in body list
+                    pygame.draw.rect(mini_surface, color_data["head"], rect)
+                else:
+                    pygame.draw.rect(mini_surface, color_data["body"], rect)
+        
+        # Draw apples
+        if 'apples' in game_state:
+            for apple_pos, apple_color in game_state['apples']:
+                x, y = apple_pos
+                color = COLOR_GREEN if apple_color == "green" else COLOR_RED
+                
+                rect_x = start_x + int(x * CELL_SIZE * scale)
+                rect_y = start_y + int(y * CELL_SIZE * scale)
+                rect_size = max(2, int(CELL_SIZE * scale))
+                
+                apple_rect = pygame.Rect(rect_x, rect_y, rect_size, rect_size)
+                pygame.draw.rect(mini_surface, color, apple_rect)
+    
+    # Draw game info - Episode number prominently at top
+    font_large = pygame.font.Font(None, 28)
+    font_small = pygame.font.Font(None, 20)
+    
+    episode_text = font_large.render(f"Episode {replay_info['episode']}", True, (255, 255, 255))
+    score_text = font_small.render(f"Score: {replay_info['score']}", True, (255, 255, 255))
+    
+    mini_surface.blit(episode_text, (5, 5))
+    mini_surface.blit(score_text, (5, 25))
+    
+    # Draw "FINISHED" if replay is complete
+    if step_index >= len(replay_info['states']):
+        finished_text = font_small.render("FINISHED", True, (255, 0, 0))
+        text_rect = finished_text.get_rect(center=(MINI_BOARD_WIDTH//2, MINI_BOARD_HEIGHT//2))
+        mini_surface.blit(finished_text, text_rect)
+    
+    # Blit to main screen
+    screen.blit(mini_surface, (offset_x, offset_y))
+
+
+def show_interval_replays(progressive_manager, speed=10):
+    """Display all 9 interval replays in a 3x3 grid"""
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("Snake Training Progress - Episode Intervals")
+    clock = pygame.time.Clock()
+    
+    replays = progressive_manager.get_interval_replays()
+    step_index = 0
+    running = True
+    paused = False
+    
+    # Debug: Print replay info
+    print("\n" + "="*50)
+    print("INTERVAL REPLAY SHOWCASE")
+    print("="*50)
+    print(f"Total replays: {len(replays)}")
+    for i, replay in enumerate(replays):
+        print(f"Replay {i+1}: Episode {replay['episode']}, {len(replay['states'])} states, score: {replay['score']}")
+    print("Controls:")
+    print("  SPACE - Pause/Resume")
+    print("  R - Restart")
+    print("  Q - Quit")
+    print("  +/- - Speed up/down")
+    print("="*50)
+    
+    while running:
+        # Handle events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    running = False
+                elif event.key == pygame.K_SPACE:
+                    paused = not paused
+                    print("Paused" if paused else "Resumed")
+                elif event.key == pygame.K_r:
+                    step_index = 0
+                    paused = False  # Unpause when restarting
+                    print("Restarted replays")
+                elif event.key == pygame.K_PLUS or event.key == pygame.K_EQUALS:
+                    speed = min(speed + 2, 30)
+                    print(f"Speed: {speed}")
+                elif event.key == pygame.K_MINUS:
+                    speed = max(speed - 2, 1)
+                    print(f"Speed: {speed}")
+        
+        # Clear screen
+        screen.fill(COLOR_BLACK)
+        
+        # Find max steps across all replays
+        max_steps = max(len(replay['states']) for replay in replays if replay['states'])
+        if max_steps == 0:
+            # No replays with states, show error message
+            font = pygame.font.Font(None, 48)
+            error_text = font.render("No replay data available!", True, (255, 0, 0))
+            error_rect = error_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+            screen.blit(error_text, error_rect)
+            
+            font_small = pygame.font.Font(None, 24)
+            hint_text = font_small.render("Press Q to quit", True, (255, 255, 255))
+            hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 50))
+            screen.blit(hint_text, hint_rect)
+        else:
+            # Draw each replay
+            active_replays = 0
+            
+            for i, replay_info in enumerate(replays):
+                current_state = None
+                
+                if replay_info['states'] and step_index < len(replay_info['states']):
+                    current_state = replay_info['states'][step_index]
+                    active_replays += 1
+                elif replay_info['states']:
+                    # Show last state if replay is finished
+                    current_state = replay_info['states'][-1]
+                
+                # Calculate grid position
+                grid_x = i % GRID_SIZE
+                grid_y = i // GRID_SIZE
+                
+                # Draw the mini game
+                draw_interval_mini_game(screen, current_state, grid_x, grid_y, replay_info, step_index)
+            
+            # Draw overall info
+            font = pygame.font.Font(None, 36)
+            info_text = font.render(
+                f"Step: {step_index}/{max_steps} | Active: {active_replays}/9 | Speed: {speed}", 
+                True, (255, 255, 255)
+            )
+            screen.blit(info_text, (10, SCREEN_HEIGHT - 60))
+            
+            # Advance step logic
+            if not paused and max_steps > 0:
+                if step_index >= max_steps:
+                    step_index = 0  # Auto-restart when all replays finish
+                    print("All replays finished, auto-restarting...")
+                else:
+                    step_index += 1
+        
+        # Draw controls
+        font_small = pygame.font.Font(None, 24)
+        controls_text = font_small.render(
+            "SPACE=Pause | R=Restart | +/-=Speed | Q=Quit", 
+            True, (200, 200, 200)
+        )
+        screen.blit(controls_text, (10, SCREEN_HEIGHT - 30))
+        
+        # Draw pause indicator
+        if paused:
+            pause_text = pygame.font.Font(None, 48).render("PAUSED", True, (255, 255, 0))
+            pause_rect = pause_text.get_rect(center=(SCREEN_WIDTH//2, 30))
+            screen.blit(pause_text, pause_rect)
+        
+        pygame.display.flip()
+        clock.tick(speed)
+    
+    pygame.quit()
+
+
+def show_progressive_replays(progressive_manager, speed=10):
+    """Display all 9 progressive replays in a 3x3 grid"""
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("Snake Training Progress - 9 Progressive Replays")
+    clock = pygame.time.Clock()
+    
+    replays = progressive_manager.get_all_replays()
+    step_index = 0
+    running = True
+    paused = False
+    
+    print("\n" + "="*50)
+    print("PROGRESSIVE REPLAY SHOWCASE")
+    print("="*50)
+    print(f"Total replays: {len(replays)}")
+    for i, replay in enumerate(replays):
+        print(f"Replay {i+1}: {len(replay['states'])} states, score: {replay['score']}, target: {replay['target_score']}")
+    print("Controls:")
+    print("  SPACE - Pause/Resume")
+    print("  R - Restart")
+    print("  Q - Quit")
+    print("  +/- - Speed up/down")
+    print("="*50)
+    
+    while running:
+        # Handle events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    running = False
+                elif event.key == pygame.K_SPACE:
+                    paused = not paused
+                    print("Paused" if paused else "Resumed")
+                elif event.key == pygame.K_r:
+                    step_index = 0
+                    paused = False  # Unpause when restarting
+                    print("Restarted replays")
+                elif event.key == pygame.K_PLUS or event.key == pygame.K_EQUALS:
+                    speed = min(speed + 2, 30)
+                    print(f"Speed: {speed}")
+                elif event.key == pygame.K_MINUS:
+                    speed = max(speed - 2, 1)
+                    print(f"Speed: {speed}")
+        
+        # Clear screen
+        screen.fill(COLOR_BLACK)
+        
+        # Find max steps across all replays
+        max_steps = max(len(replay['states']) for replay in replays if replay['states'])
+        if max_steps == 0:
+            # No replays with states, show error message
+            font = pygame.font.Font(None, 48)
+            error_text = font.render("No replay data available!", True, (255, 0, 0))
+            error_rect = error_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+            screen.blit(error_text, error_rect)
+            
+            font_small = pygame.font.Font(None, 24)
+            hint_text = font_small.render("Press Q to quit", True, (255, 255, 255))
+            hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 50))
+            screen.blit(hint_text, hint_rect)
+        else:
+            # Draw each replay
+            active_replays = 0
+            
+            for i, replay_info in enumerate(replays):
+                current_state = None
+                
+                if replay_info['states'] and step_index < len(replay_info['states']):
+                    current_state = replay_info['states'][step_index]
+                    active_replays += 1
+                elif replay_info['states']:
+                    # Show last state if replay is finished
+                    current_state = replay_info['states'][-1]
+                
+                # Calculate grid position
+                grid_x = i % GRID_SIZE
+                grid_y = i // GRID_SIZE
+                
+                # Draw the mini game
+                draw_mini_game(screen, current_state, grid_x, grid_y, replay_info, step_index)
+            
+            # Draw overall info
+            font = pygame.font.Font(None, 36)
+            info_text = font.render(
+                f"Step: {step_index}/{max_steps} | Active: {active_replays}/9 | Speed: {speed}", 
+                True, (255, 255, 255)
+            )
+            screen.blit(info_text, (10, SCREEN_HEIGHT - 60))
+            
+            # Advance step logic
+            if not paused and max_steps > 0:
+                if step_index >= max_steps:
+                    step_index = 0  # Auto-restart when all replays finish
+                    print("All replays finished, auto-restarting...")
+                else:
+                    step_index += 1
+        
+        # Draw controls
+        font_small = pygame.font.Font(None, 24)
+        controls_text = font_small.render(
+            "SPACE=Pause | R=Restart | +/-=Speed | Q=Quit", 
+            True, (200, 200, 200)
+        )
+        screen.blit(controls_text, (10, SCREEN_HEIGHT - 30))
+        
+        # Draw pause indicator
+        if paused:
+            pause_text = pygame.font.Font(None, 48).render("PAUSED", True, (255, 255, 0))
+            pause_rect = pause_text.get_rect(center=(SCREEN_WIDTH//2, 30))
+            screen.blit(pause_text, pause_rect)
+        
+        pygame.display.flip()
+        clock.tick(speed)
+    
+    pygame.quit()
+
+def draw_mini_game(screen, game_state, grid_x, grid_y, replay_info, step_index):
+    """Draw a single mini game in the grid for progressive replays"""
+    offset_x = grid_x * MINI_BOARD_WIDTH
+    offset_y = grid_y * MINI_BOARD_HEIGHT
+    
+    # Create surface for this mini game
+    mini_surface = pygame.Surface((MINI_BOARD_WIDTH, MINI_BOARD_HEIGHT))
+    mini_surface.fill(COLOR_BLACK)
+    
+    # Draw border
+    border_color = (0, 255, 0) if step_index < len(replay_info['states']) else (255, 0, 0)
+    pygame.draw.rect(mini_surface, border_color, 
+                    (0, 0, MINI_BOARD_WIDTH, MINI_BOARD_HEIGHT), 2)
+    
+    # Scale factor for mini display
+    scale_x = (MINI_BOARD_WIDTH - 20) / (BOARD_WIDTH * CELL_SIZE)
+    scale_y = (MINI_BOARD_HEIGHT - 60) / (BOARD_HEIGHT * CELL_SIZE)
+    scale = min(scale_x, scale_y)
+    
+    start_x = 10
+    start_y = 40
+    
+    # Work with ReplayManager's state format
+    if game_state and 'players' in game_state:
+        # Draw snake(s)
+        for i, player in enumerate(game_state['players']):
+            if i >= len(PLAYER_COLORS):
+                continue
+                
+            # Check if snake is alive
+            snake_alive = True
+            if 'snake_alive' in game_state and i < len(game_state['snake_alive']):
+                snake_alive = game_state['snake_alive'][i]
+            
+            if not snake_alive:
+                continue
+                
+            color_data = PLAYER_COLORS[i]
+            
+            # Draw snake body
+            for j, (x, y) in enumerate(player['body']):
+                rect_x = start_x + int(x * CELL_SIZE * scale)
+                rect_y = start_y + int(y * CELL_SIZE * scale)
+                rect_size = max(2, int(CELL_SIZE * scale))
+                
+                rect = pygame.Rect(rect_x, rect_y, rect_size, rect_size)
+                
+                if j == 0:  # Head is first in body list
+                    pygame.draw.rect(mini_surface, color_data["head"], rect)
+                else:
+                    pygame.draw.rect(mini_surface, color_data["body"], rect)
+        
+        # Draw apples
+        if 'apples' in game_state:
+            for apple_pos, apple_color in game_state['apples']:
+                x, y = apple_pos
+                color = COLOR_GREEN if apple_color == "green" else COLOR_RED
+                
+                rect_x = start_x + int(x * CELL_SIZE * scale)
+                rect_y = start_y + int(y * CELL_SIZE * scale)
+                rect_size = max(2, int(CELL_SIZE * scale))
+                
+                apple_rect = pygame.Rect(rect_x, rect_y, rect_size, rect_size)
+                pygame.draw.rect(mini_surface, color, apple_rect)
+    
+    # Draw game info
+    font = pygame.font.Font(None, 24)
+    game_text = font.render(f"Target: {replay_info['target_score']}", True, (255, 255, 255))
+    score_text = font.render(f"Score: {replay_info['score']}", True, (255, 255, 255))
+    
+    mini_surface.blit(game_text, (5, 5))
+    mini_surface.blit(score_text, (5, 20))
+    
+    # Draw "FINISHED" if replay is complete
+    if step_index >= len(replay_info['states']):
+        finished_text = font.render("FINISHED", True, (255, 0, 0))
+        text_rect = finished_text.get_rect(center=(MINI_BOARD_WIDTH//2, MINI_BOARD_HEIGHT//2))
+        mini_surface.blit(finished_text, text_rect)
+    
+    # Blit to main screen
+    screen.blit(mini_surface, (offset_x, offset_y))
 
 
 def main():
@@ -524,6 +1082,10 @@ def main():
                         '--smart-exploration',
                         action='store_true',
                         help='Enable smart exploration during training')
+    parser.add_argument('-ir',
+                        '--interval-replays',
+                        action='store_true',
+                        help='Show interval-based replays instead of score-based replays')
     args = parser.parse_args()
 
     if args.num_players < 1 or args.num_players > 4:
@@ -546,7 +1108,8 @@ def main():
             model_path=args.model_path if args.num_players == 1 else None,
             speed=args.display_speed,
             num_players=args.num_players,
-            use_smart_exploration=args.smart_exploration)
+            use_smart_exploration=args.smart_exploration,
+            use_interval_replays=args.interval_replays)
     elif args.mode == 'play':
         play_game(model_path=args.model_path,
                   num_players=args.num_players,
